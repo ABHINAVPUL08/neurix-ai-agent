@@ -1,5 +1,5 @@
 import mammoth from "mammoth";
-import { extractPdfTextFromBuffer } from "@/lib/pdf-parse-server";
+import { extractPdfTextFromBuffer } from "@/lib/pdfjs-server";
 import {
   detectDocumentType,
   MAX_DOCUMENT_TEXT_LENGTH,

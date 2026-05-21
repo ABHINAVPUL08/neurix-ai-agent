@@ -4,7 +4,7 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   serverExternalPackages: [
-    "pdf-parse",
+    "pdfjs-dist",
     "@napi-rs/canvas",
     "mammoth",
     "@react-pdf/renderer",
