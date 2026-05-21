@@ -1,3 +1,4 @@
+import { createCanvas } from "@napi-rs/canvas";
 import path from "path";
 import { pathToFileURL } from "url";
 
@@ -78,4 +79,53 @@ export async function extractPdfTextFromBuffer(buffer: Buffer): Promise<string> 
   }
 
   return pageTexts.join("\n\n");
+}
+
+/**
+ * Render PDF pages to PNG buffers for OCR (in-memory, no filesystem).
+ */
+export async function renderPdfPagesToPngBuffers(
+  buffer: Buffer,
+  maxPages = 10,
+): Promise<Buffer[]> {
+  await ensurePdfJsWorker();
+  const pdfjs = await getPdfJs();
+
+  const data = new Uint8Array(buffer);
+  const doc = await pdfjs.getDocument({
+    data,
+    useSystemFonts: true,
+    disableFontFace: true,
+  }).promise;
+
+  const images: Buffer[] = [];
+  const pageCount = Math.min(doc.numPages, Math.max(1, maxPages));
+
+  try {
+    for (let pageNum = 1; pageNum <= pageCount; pageNum++) {
+      const page = await doc.getPage(pageNum);
+      try {
+        const viewport = page.getViewport({ scale: 2 });
+        const width = Math.floor(viewport.width);
+        const height = Math.floor(viewport.height);
+        const canvas = createCanvas(width, height);
+        const context = canvas.getContext("2d");
+
+        await page.render({
+          canvas: canvas as unknown as HTMLCanvasElement,
+          canvasContext:
+            context as unknown as CanvasRenderingContext2D,
+          viewport,
+        }).promise;
+
+        images.push(canvas.toBuffer("image/png"));
+      } finally {
+        page.cleanup();
+      }
+    }
+  } finally {
+    await doc.destroy();
+  }
+
+  return images;
 }

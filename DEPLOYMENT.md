@@ -45,7 +45,8 @@ vercel --prod
 ## Limits on Vercel
 
 - **Document uploads:** max **4 MB** per file on Vercel (serverless request body limit). Local dev allows up to **9 MB**.
-- **PDF parsing:** uses `pdfjs-dist` (server-side text extraction) + `GROQ_API_KEY`.
+- **PDF parsing:** `pdfjs-dist` for text PDFs; **tesseract.js** OCR fallback for scanned PDFs/images + `GROQ_API_KEY`.
+- **OCR:** up to 5 pages on Vercel (90s function timeout); downloads English traineddata on first run.
 - **PDF export:** server-side generation, up to **60s** (`maxDuration`).
 - **Chat / analysis:** up to **60s** per request on Pro; Hobby may cap lower.
 

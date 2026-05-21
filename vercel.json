@@ -7,7 +7,7 @@
       "memory": 1024
     },
     "app/api/analyze-document/route.ts": {
-      "maxDuration": 60,
+      "maxDuration": 90,
       "memory": 1024
     },
     "app/api/chat/route.ts": {

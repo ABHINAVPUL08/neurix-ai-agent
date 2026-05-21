@@ -31,10 +31,10 @@ export function validateDocumentFile(file: File): string | null {
     return `File too large. Maximum size is ${label}.`;
   }
   if (!detectDocumentType(file.type, file.name)) {
-    return "Unsupported file. Upload PDF, DOCX, or TXT.";
+    return "Unsupported file. Upload PDF, DOCX, TXT, or image (PNG/JPG/WebP).";
   }
   return null;
 }
 
 export const DOCUMENT_ACCEPT =
-  ".pdf,.docx,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain";
+  ".pdf,.docx,.txt,.png,.jpg,.jpeg,.webp,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,image/png,image/jpeg,image/webp";

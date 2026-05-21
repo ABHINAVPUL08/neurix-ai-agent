@@ -20,7 +20,7 @@ import { GROQ_MODEL, GROQ_TEMPERATURE } from "@/lib/constants";
 import { getGroqClient } from "@/lib/groq";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 90;
 
 const ANALYSIS_MAX_TOKENS = 3072;
 
@@ -143,7 +143,8 @@ export async function POST(request: NextRequest) {
     if (!fileType) {
       return NextResponse.json(
         {
-          error: "Unsupported file type. Upload PDF, DOCX, or TXT.",
+          error:
+            "Unsupported file type. Upload PDF, DOCX, TXT, or image (PNG/JPG/WebP).",
           code: "invalid_file_type",
         },
         { status: 400 },
@@ -162,6 +163,7 @@ export async function POST(request: NextRequest) {
       );
       logAnalyzeDocument("parser_result", {
         fileType: extracted.fileType,
+        extractionMethod: extracted.extractionMethod,
         charCount: extracted.charCount,
         truncated: extracted.truncated,
         preview: extracted.text.slice(0, 120),
@@ -180,7 +182,7 @@ export async function POST(request: NextRequest) {
           error:
             msg.includes("Unsupported") || msg.includes("extract")
               ? msg
-              : "Could not read this document. Try a text-based PDF, DOCX, or TXT file.",
+              : "Could not read this document. Try a text-based or scanned PDF, DOCX, TXT, or a clear image.",
           code: "extraction_failed",
         },
         { status: 422 },
@@ -230,6 +232,7 @@ export async function POST(request: NextRequest) {
         fileType: extracted.fileType,
         charCount: extracted.charCount,
         truncated: extracted.truncated,
+        extractionMethod: extracted.extractionMethod,
       },
     });
   } catch (error) {

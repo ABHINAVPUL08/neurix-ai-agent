@@ -16,6 +16,7 @@ export type AnalysisMeta = {
   fileType: string;
   charCount: number;
   truncated: boolean;
+  extractionMethod?: string;
 };
 
 type AnalysisResult = {
