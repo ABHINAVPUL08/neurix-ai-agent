@@ -1,5 +1,20 @@
-/** Safe for Vercel serverless (~4.5 MB request body limit) */
+/** Local / non-Vercel max upload (under 10 MB) */
+export const MAX_UPLOAD_BYTES = 9 * 1024 * 1024;
+
+/** Vercel serverless request body limit (~4.5 MB) */
 export const VERCEL_MAX_UPLOAD_BYTES = 4 * 1024 * 1024;
+
+/** Effective upload cap based on deployment */
+export function getMaxUploadBytes(): number {
+  if (process.env.VERCEL === "1") {
+    return VERCEL_MAX_UPLOAD_BYTES;
+  }
+  return MAX_UPLOAD_BYTES;
+}
+
+export function getMaxUploadLabel(): string {
+  return process.env.VERCEL === "1" ? "4 MB" : "9 MB";
+}
 
 export const MAX_EXPORT_PAYLOAD_BYTES = 2 * 1024 * 1024;
 

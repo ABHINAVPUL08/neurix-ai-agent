@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import { MAX_DOCUMENT_SIZE_BYTES } from "@/lib/document-types";
+import { getClientMaxUploadBytes } from "@/lib/validate-document-file";
 
 export type AnalysisPhase =
   | "idle"
@@ -68,8 +68,8 @@ export function useDocumentAnalysis() {
     async (onSuccess: (result: AnalysisResult) => void) => {
       if (!file) return;
 
-      if (file.size > MAX_DOCUMENT_SIZE_BYTES) {
-        setError("File too large. Maximum size is 10 MB.");
+      if (file.size > getClientMaxUploadBytes()) {
+        setError("File too large for upload.");
         setPhase("error");
         return;
       }

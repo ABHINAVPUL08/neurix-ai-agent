@@ -1,3 +1,7 @@
+import { MAX_UPLOAD_BYTES, VERCEL_MAX_UPLOAD_BYTES } from "@/lib/env";
+
+export { MAX_UPLOAD_BYTES, VERCEL_MAX_UPLOAD_BYTES };
+
 export const ACCEPTED_DOCUMENT_TYPES = {
   "application/pdf": [".pdf"],
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document": [
@@ -7,11 +11,6 @@ export const ACCEPTED_DOCUMENT_TYPES = {
 } as const;
 
 export const ACCEPTED_EXTENSIONS = [".pdf", ".docx", ".txt"] as const;
-
-import { VERCEL_MAX_UPLOAD_BYTES } from "@/lib/env";
-
-/** Vercel serverless body limit (~4.5 MB); use 4 MB for safe margin */
-export const MAX_DOCUMENT_SIZE_BYTES = VERCEL_MAX_UPLOAD_BYTES;
 
 export const MAX_DOCUMENT_TEXT_LENGTH = 14_000;
 

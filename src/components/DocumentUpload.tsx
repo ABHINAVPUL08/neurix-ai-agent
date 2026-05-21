@@ -11,10 +11,8 @@ import {
   Sparkles,
   AlertCircle,
 } from "lucide-react";
-import {
-  ACCEPTED_DOCUMENT_TYPES,
-  MAX_DOCUMENT_SIZE_BYTES,
-} from "@/lib/document-types";
+import { ACCEPTED_DOCUMENT_TYPES } from "@/lib/document-types";
+import { getClientMaxUploadBytes } from "@/lib/validate-document-file";
 import {
   useDocumentAnalysis,
   type AnalysisMeta,
@@ -59,7 +57,7 @@ export function DocumentUpload({
     onDrop,
     accept: ACCEPTED_DOCUMENT_TYPES,
     maxFiles: 1,
-    maxSize: MAX_DOCUMENT_SIZE_BYTES,
+    maxSize: getClientMaxUploadBytes(),
     disabled: disabled || isBusy,
     noClick: true,
     noKeyboard: true,

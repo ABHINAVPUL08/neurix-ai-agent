@@ -1,5 +1,5 @@
 import mammoth from "mammoth";
-import { PDFParse } from "pdf-parse";
+import { extractPdfTextFromBuffer } from "@/lib/pdf-parse-server";
 import {
   detectDocumentType,
   MAX_DOCUMENT_TEXT_LENGTH,
@@ -12,16 +12,6 @@ export type ExtractedDocument = {
   fileType: DocumentFileType;
   charCount: number;
 };
-
-async function extractPdfText(buffer: Buffer): Promise<string> {
-  const parser = new PDFParse({ data: buffer });
-  try {
-    const result = await parser.getText();
-    return result.text ?? "";
-  } finally {
-    await parser.destroy();
-  }
-}
 
 async function extractDocxText(buffer: Buffer): Promise<string> {
   const result = await mammoth.extractRawText({ buffer });
@@ -49,7 +39,7 @@ function truncateForAnalysis(text: string): {
   };
 }
 
-/** Server-side text extraction from PDF, DOCX, or TXT */
+/** Server-side text extraction from PDF, DOCX, or TXT (in-memory buffers only) */
 export async function extractTextFromDocument(
   buffer: Buffer,
   mimeType: string,
@@ -65,7 +55,7 @@ export async function extractTextFromDocument(
 
   switch (fileType) {
     case "pdf":
-      raw = await extractPdfText(buffer);
+      raw = await extractPdfTextFromBuffer(buffer);
       break;
     case "docx":
       raw = await extractDocxText(buffer);
