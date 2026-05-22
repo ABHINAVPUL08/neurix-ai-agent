@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@emailjs/browser": "^4.4.1",
     "@google/generative-ai": "^0.24.1",
     "@napi-rs/canvas": "^0.1.100",
     "@react-pdf/renderer": "^4.5.1",

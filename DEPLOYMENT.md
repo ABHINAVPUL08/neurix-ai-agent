@@ -12,7 +12,10 @@ Set these in **Vercel → Project → Settings → Environment Variables**:
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `GROQ_API_KEY` | **Yes** | Groq API key for chat and document analysis |
-| `RESEND_API_KEY` | No | Sends consultation form via email |
+| `NEXT_PUBLIC_EMAILJS_SERVICE_ID` | No | Feedback form (EmailJS) |
+| `NEXT_PUBLIC_EMAILJS_TEMPLATE_ID` | No | Feedback EmailJS template |
+| `NEXT_PUBLIC_EMAILJS_PUBLIC_KEY` | No | EmailJS public key |
+| `RESEND_API_KEY` | No | Consultation form email (Resend) |
 | `RESEND_FROM_EMAIL` | No | Verified sender for Resend |
 | `NEXT_PUBLIC_CALENDLY_URL` | No | Calendly embed URL |
 | `NEXT_PUBLIC_SUPABASE_URL` | No | Future auth/persistence |
