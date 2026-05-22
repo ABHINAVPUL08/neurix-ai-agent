@@ -1,6 +1,6 @@
 "use client";
 
-import type { ComponentType } from "react";
+import { memo, type ComponentType } from "react";
 import { motion } from "framer-motion";
 import {
   Calendar,
@@ -79,7 +79,7 @@ function NavTab({
   );
 }
 
-export function Navbar({
+function NavbarInner({
   view,
   onViewChange,
   onBookConsultation,
@@ -278,3 +278,5 @@ export function Navbar({
     </motion.header>
   );
 }
+
+export const Navbar = memo(NavbarInner);

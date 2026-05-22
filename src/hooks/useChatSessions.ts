@@ -5,6 +5,7 @@ import { resolveAiMode, type AiModeId } from "@/lib/ai-modes";
 import {
   WELCOME_MESSAGE,
   WELCOME_ID,
+  conversationHasUserContent,
   createMessage,
   getChatTitle,
 } from "@/lib/chat-utils";
@@ -37,32 +38,29 @@ export function useChatSessions(initialMode: AiModeId = "consultant") {
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
-    const stored = loadConversations().map((c) => ({
-      ...c,
-      aiMode: resolveAiMode(c.aiMode),
-    }));
-    if (stored.length > 0) {
-      setConversations(stored);
-      setActiveId(stored[0].id);
-    } else {
-      const first = createConversation(initialMode);
-      setConversations([first]);
-      setActiveId(first.id);
-    }
+    const history = loadConversations()
+      .map((c) => ({
+        ...c,
+        aiMode: resolveAiMode(c.aiMode),
+      }))
+      .filter(conversationHasUserContent);
+
+    const fresh = createConversation(initialMode);
+    setConversations([fresh, ...history]);
+    setActiveId(fresh.id);
     setHydrated(true);
   }, [initialMode]);
 
   useEffect(() => {
-    if (!hydrated || conversations.length === 0) return;
-    saveConversations(conversations);
+    if (!hydrated) return;
+    const persistable = conversations.filter(conversationHasUserContent);
+    saveConversations(persistable);
   }, [conversations, hydrated]);
 
   const active = conversations.find((c) => c.id === activeId) ?? conversations[0];
 
   const updateActive = useCallback(
-    (
-      updater: (conv: Conversation) => Conversation,
-    ) => {
+    (updater: (conv: Conversation) => Conversation) => {
       if (!activeId) return;
       setConversations((prev) =>
         prev.map((c) => {
@@ -80,7 +78,11 @@ export function useChatSessions(initialMode: AiModeId = "consultant") {
   );
 
   const setMessages = useCallback(
-    (messages: ChatMessageItem[] | ((prev: ChatMessageItem[]) => ChatMessageItem[])) => {
+    (
+      messages:
+        | ChatMessageItem[]
+        | ((prev: ChatMessageItem[]) => ChatMessageItem[]),
+    ) => {
       updateActive((c) => ({
         ...c,
         messages:
@@ -113,11 +115,25 @@ export function useChatSessions(initialMode: AiModeId = "consultant") {
   );
 
   const newChat = useCallback(() => {
-    const conv = createConversation(active?.aiMode ?? initialMode);
+    const mode = resolveAiMode(active?.aiMode ?? initialMode);
+
+    if (active && activeId && !conversationHasUserContent(active)) {
+      const reset = createConversation(mode);
+      setConversations((prev) =>
+        prev.map((c) =>
+          c.id === activeId
+            ? { ...reset, id: c.id, createdAt: c.createdAt }
+            : c,
+        ),
+      );
+      return activeId;
+    }
+
+    const conv = createConversation(mode);
     setConversations((prev) => [conv, ...prev]);
     setActiveId(conv.id);
     return conv.id;
-  }, [active?.aiMode, initialMode]);
+  }, [active, activeId, initialMode]);
 
   const selectChat = useCallback((id: string) => {
     setActiveId(id);

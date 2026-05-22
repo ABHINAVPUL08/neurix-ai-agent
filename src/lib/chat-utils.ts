@@ -1,4 +1,9 @@
-import type { ChatMessageItem, MessageKind, MessageRole } from "@/types/chat";
+import type {
+  ChatMessageItem,
+  Conversation,
+  MessageKind,
+  MessageRole,
+} from "@/types/chat";
 
 export const WELCOME_ID = "welcome";
 
@@ -28,4 +33,9 @@ export function getChatTitle(messages: ChatMessageItem[]): string {
   const firstUser = messages.find((m) => m.role === "user");
   if (!firstUser) return "New conversation";
   return firstUser.content.slice(0, 42) + (firstUser.content.length > 42 ? "…" : "");
+}
+
+/** True if the user has sent at least one message (persistable chat). */
+export function conversationHasUserContent(conv: Conversation): boolean {
+  return conv.messages.some((m) => m.role === "user");
 }

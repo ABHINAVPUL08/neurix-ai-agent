@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { memo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
@@ -48,7 +48,7 @@ function CodeBlock({
   );
 }
 
-export function MessageMarkdown({ content, className = "" }: MessageMarkdownProps) {
+function MessageMarkdownInner({ content, className = "" }: MessageMarkdownProps) {
   return (
     <div className={`markdown-body ${className}`}>
       <ReactMarkdown
@@ -74,3 +74,5 @@ export function MessageMarkdown({ content, className = "" }: MessageMarkdownProp
     </div>
   );
 }
+
+export const MessageMarkdown = memo(MessageMarkdownInner);

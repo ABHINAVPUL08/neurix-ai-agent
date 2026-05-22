@@ -1,10 +1,13 @@
 "use client";
 
+import { memo } from "react";
 import { motion } from "framer-motion";
 import { Bot } from "lucide-react";
+import { UploadProgressBar } from "@/components/chat/UploadProgressBar";
 
 type TypingLoaderProps = {
   status?: "thinking" | "analyzing" | "generating";
+  uploadProgress?: number;
 };
 
 const STATUS_LABELS = {
@@ -13,7 +16,10 @@ const STATUS_LABELS = {
   generating: "Building recommendations...",
 };
 
-export function TypingLoader({ status = "thinking" }: TypingLoaderProps) {
+function TypingLoaderInner({
+  status = "thinking",
+  uploadProgress,
+}: TypingLoaderProps) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }}
@@ -35,12 +41,25 @@ export function TypingLoader({ status = "thinking" }: TypingLoaderProps) {
             {STATUS_LABELS[status]}
           </span>
         </div>
-        <div className="flex gap-1.5">
-          <span className="typing-dot h-2 w-2 rounded-full bg-purple-400" />
-          <span className="typing-dot h-2 w-2 rounded-full bg-purple-400" />
-          <span className="typing-dot h-2 w-2 rounded-full bg-purple-400" />
-        </div>
+        {uploadProgress != null && uploadProgress > 0 ? (
+          <UploadProgressBar
+            progress={uploadProgress}
+            label={
+              uploadProgress < 92
+                ? "Uploading & analyzing document…"
+                : "Finalizing analysis…"
+            }
+          />
+        ) : (
+          <div className="flex gap-1.5">
+            <span className="typing-dot h-2 w-2 rounded-full bg-purple-400" />
+            <span className="typing-dot h-2 w-2 rounded-full bg-purple-400" />
+            <span className="typing-dot h-2 w-2 rounded-full bg-purple-400" />
+          </div>
+        )}
       </div>
     </motion.div>
   );
 }
+
+export const TypingLoader = memo(TypingLoaderInner);

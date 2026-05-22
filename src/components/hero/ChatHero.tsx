@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import { motion } from "framer-motion";
 import {
   ArrowRight,
@@ -34,7 +35,7 @@ type ChatHeroProps = {
   chipsDisabled?: boolean;
 };
 
-export function ChatHero({
+function ChatHeroInner({
   onTileSelect,
   onChipSelect,
   onUploadClick,
@@ -121,3 +122,5 @@ export function ChatHero({
     </section>
   );
 }
+
+export const ChatHero = memo(ChatHeroInner);

@@ -3,18 +3,16 @@
 import dynamic from "next/dynamic";
 import { AnimatePresence, motion } from "framer-motion";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { BackgroundOrbs } from "@/components/BackgroundOrbs";
-import { ParticleField } from "@/components/effects/ParticleField";
-import { ParallaxGlow } from "@/components/effects/ParallaxGlow";
-import { ChatMessage } from "@/components/ChatMessage";
+import { BackgroundEffects } from "@/components/effects/BackgroundEffects";
+import { ChatMessageList } from "@/components/chat/ChatMessageList";
+import { ChatShellSkeleton } from "@/components/chat/ChatShellSkeleton";
+import { conversationHasUserContent } from "@/lib/chat-utils";
 import { Navbar } from "@/components/Navbar";
 import { TypingLoader } from "@/components/TypingLoader";
-import { ChatHero } from "@/components/hero/ChatHero";
-import { TemplateMarketplace } from "@/components/templates/TemplateMarketplace";
 import { ChatComposer } from "@/components/chat/ChatComposer";
 import { Sidebar } from "@/components/layout/Sidebar";
-import { ConsultationModal } from "@/components/modals/ConsultationModal";
-import { PricingModal } from "@/components/pricing/PricingModal";
+import { createBatchedContentUpdater } from "@/lib/batched-message-update";
+import { useUploadProgress } from "@/hooks/useUploadProgress";
 import { ExportToast, type ExportToastState } from "@/components/ui/ExportToast";
 import {
   AuditExportProvider,
@@ -40,6 +38,33 @@ import type { AppView, ChatMessageItem } from "@/types/chat";
 const DashboardView = dynamic(
   () =>
     import("@/components/dashboard/DashboardView").then((m) => m.DashboardView),
+  { ssr: false },
+);
+
+const ChatHero = dynamic(
+  () => import("@/components/hero/ChatHero").then((m) => m.ChatHero),
+  { ssr: false },
+);
+
+const TemplateMarketplace = dynamic(
+  () =>
+    import("@/components/templates/TemplateMarketplace").then(
+      (m) => m.TemplateMarketplace,
+    ),
+  { ssr: false },
+);
+
+const ConsultationModal = dynamic(
+  () =>
+    import("@/components/modals/ConsultationModal").then(
+      (m) => m.ConsultationModal,
+    ),
+  { ssr: false },
+);
+
+const PricingModal = dynamic(
+  () =>
+    import("@/components/pricing/PricingModal").then((m) => m.PricingModal),
   { ssr: false },
 );
 
@@ -103,10 +128,18 @@ function NeurixPlatformInner({
   const [activeSuggestionLabels, setActiveSuggestionLabels] = useState<
     string[] | undefined
   >(undefined);
+  const chatScrollRef = useRef<HTMLDivElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const composerInputRef = useRef<HTMLTextAreaElement>(null);
   const scrollThrottleRef = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
+  const sendInFlightRef = useRef(false);
+  const {
+    progress: uploadProgress,
+    start: startUploadProgress,
+    reset: resetUploadProgress,
+    complete: completeUploadProgress,
+  } = useUploadProgress();
 
   const showHero =
     view === "chat" &&
@@ -121,6 +154,11 @@ function NeurixPlatformInner({
     () => messages.findLastIndex((m) => m.role === "assistant"),
     [messages],
   );
+
+  const scrollContentKey = useMemo(() => {
+    const last = messages[messages.length - 1];
+    return last ? `${last.id}:${last.content.length}` : "0";
+  }, [messages]);
 
   const auditMessage = useMemo(
     () =>
@@ -159,7 +197,7 @@ function NeurixPlatformInner({
       behavior: streamingId ? "auto" : "smooth",
       block: "end",
     });
-  }, [messages.length, isLoading, isAnalyzingDoc, streamingId, view]);
+  }, [scrollContentKey, isLoading, isAnalyzingDoc, streamingId, view]);
 
   useEffect(() => () => speechController.stop(), []);
 
@@ -169,7 +207,9 @@ function NeurixPlatformInner({
     setStreamingId(null);
     setIsLoading(false);
     setIsAnalyzingDoc(false);
-  }, []);
+    resetUploadProgress();
+    sendInFlightRef.current = false;
+  }, [resetUploadProgress]);
 
   const streamAssistantReply = useCallback(
     async (history: ChatMessageItem[]) => {
@@ -178,22 +218,26 @@ function NeurixPlatformInner({
       abortRef.current = controller;
 
       const assistantMsg = createMessage("assistant", "");
+      const assistantId = assistantMsg.id;
       setMessages((prev) => [...prev, assistantMsg]);
-      setStreamingId(assistantMsg.id);
+      setStreamingId(assistantId);
       setIsLoading(false);
+
+      const { push: appendChunk, flushNow: flushStreamChunks } =
+        createBatchedContentUpdater((delta) => {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantId
+                ? { ...m, content: m.content + delta }
+                : m,
+            ),
+          );
+        });
 
       await new Promise<void>((resolve, reject) => {
         fetchChatReplyStream(history, aiMode, WELCOME_ID, {
           signal: controller.signal,
-          onChunk: (chunk) => {
-            setMessages((prev) =>
-              prev.map((m) =>
-                m.id === assistantMsg.id
-                  ? { ...m, content: m.content + chunk }
-                  : m,
-              ),
-            );
-          },
+          onChunk: appendChunk,
           onDone: () => resolve(),
           onError: (err) => {
             if (err.name === "AbortError") resolve();
@@ -202,6 +246,7 @@ function NeurixPlatformInner({
         });
       });
 
+      flushStreamChunks();
       setStreamingId(null);
       abortRef.current = null;
     },
@@ -296,88 +341,99 @@ function NeurixPlatformInner({
     async (text?: string) => {
       const trimmed = (text ?? input).trim();
       const file = pendingAttachment;
-      if ((!trimmed && !file) || chatDisabled) return;
+      if ((!trimmed && !file) || chatDisabled || sendInFlightRef.current) return;
 
-      setView("chat");
-      setShowTemplates(false);
-      setError(null);
-
-      if (file) {
-        const fileToSend = file;
-        setPendingAttachment(null);
-        setAttachmentJustAdded(false);
-        setInput("");
-
-        const userNote = trimmed
-          ? `${trimmed}\n\n📄 **Attached:** ${fileToSend.name}`
-          : `📄 **Project document uploaded:** ${fileToSend.name}\n\nPlease review my business/project document and provide your structured analysis.`;
-
-        setMessages((prev) => [...prev, createMessage("user", userNote)]);
-        setIsAnalyzingDoc(true);
-        setIsLoading(true);
-
-        abortRef.current?.abort();
-        const controller = new AbortController();
-        abortRef.current = controller;
-
-        try {
-          const { analysis, meta } = await analyzeDocumentFile(
-            fileToSend,
-            controller.signal,
-          );
-          setIsAnalyzingDoc(false);
-          setDocTruncated(meta.truncated);
-          await revealDocumentAnalysis(analysis, meta, controller.signal);
-        } catch (err) {
-          if (err instanceof Error && err.name === "AbortError") return;
-          setError(
-            err instanceof Error
-              ? err.message
-              : "Document analysis failed.",
-          );
-        } finally {
-          setIsAnalyzingDoc(false);
-          setIsLoading(false);
-          setStreamingId(null);
-          abortRef.current = null;
-        }
-        return;
-      }
-
-      const userMessage = createMessage("user", trimmed);
-      const nextMessages = [...messages, userMessage];
-
-      setMessages(nextMessages);
-      setInput("");
-      setIsLoading(true);
+      sendInFlightRef.current = true;
 
       try {
-        await streamAssistantReply(nextMessages);
-      } catch (err) {
-        if (err instanceof Error && err.name === "AbortError") return;
-        setStreamingId(null);
-        try {
-          const reply = await fetchChatReply(
-            nextMessages,
-            aiMode,
-            WELCOME_ID,
-            abortRef.current?.signal,
-          );
-          setMessages((prev) => {
-            const cleaned = prev.filter(
-              (m) => m.content.trim() !== "" || m.role === "user",
+        setView("chat");
+        setShowTemplates(false);
+        setError(null);
+
+        if (file) {
+          const fileToSend = file;
+          setPendingAttachment(null);
+          setAttachmentJustAdded(false);
+          setInput("");
+
+          const userNote = trimmed
+            ? `${trimmed}\n\n📄 **Attached:** ${fileToSend.name}`
+            : `📄 **Project document uploaded:** ${fileToSend.name}\n\nPlease review my business/project document and provide your structured analysis.`;
+
+          setMessages((prev) => [...prev, createMessage("user", userNote)]);
+          setIsAnalyzingDoc(true);
+          setIsLoading(true);
+          startUploadProgress();
+
+          abortRef.current?.abort();
+          const controller = new AbortController();
+          abortRef.current = controller;
+
+          try {
+            const { analysis, meta } = await analyzeDocumentFile(
+              fileToSend,
+              controller.signal,
             );
-            return [...cleaned, createMessage("assistant", reply)];
-          });
-        } catch {
-          setError(
-            err instanceof Error
-              ? err.message
-              : "Something went wrong. Try again.",
-          );
+            completeUploadProgress();
+            setIsAnalyzingDoc(false);
+            setDocTruncated(meta.truncated);
+            await revealDocumentAnalysis(analysis, meta, controller.signal);
+          } catch (err) {
+            if (err instanceof Error && err.name === "AbortError") return;
+            setError(
+              err instanceof Error
+                ? err.message
+                : "Document analysis failed.",
+            );
+          } finally {
+            setIsAnalyzingDoc(false);
+            setIsLoading(false);
+            setStreamingId(null);
+            abortRef.current = null;
+            resetUploadProgress();
+          }
+          return;
+        }
+
+        const userMessage = createMessage("user", trimmed);
+        const nextMessages = [...messages, userMessage];
+
+        setMessages(nextMessages);
+        setInput("");
+        setIsLoading(true);
+
+        try {
+          await streamAssistantReply(nextMessages);
+        } catch (err) {
+          if (err instanceof Error && err.name === "AbortError") return;
+          setStreamingId(null);
+          try {
+            const reply = await fetchChatReply(
+              nextMessages,
+              aiMode,
+              WELCOME_ID,
+              abortRef.current?.signal,
+            );
+            setMessages((prev) => {
+              const last = prev[prev.length - 1];
+              const withoutPartial =
+                last?.role === "assistant" && !last.content.trim()
+                  ? prev.slice(0, -1)
+                  : prev;
+              return [...withoutPartial, createMessage("assistant", reply)];
+            });
+          } catch {
+            setError(
+              err instanceof Error
+                ? err.message
+                : "Something went wrong. Try again.",
+            );
+          }
+        } finally {
+          setIsLoading(false);
         }
       } finally {
-        setIsLoading(false);
+        sendInFlightRef.current = false;
       }
     },
     [
@@ -391,11 +447,17 @@ function NeurixPlatformInner({
       createMessage,
       setMessages,
       WELCOME_ID,
+      startUploadProgress,
+      completeUploadProgress,
+      resetUploadProgress,
     ],
   );
 
   const handleRegenerate = useCallback(async () => {
-    if (chatDisabled || lastAssistantIndex < 0) return;
+    if (chatDisabled || lastAssistantIndex < 0 || sendInFlightRef.current) {
+      return;
+    }
+    sendInFlightRef.current = true;
     const withoutLast = messages.slice(0, lastAssistantIndex);
     setMessages(withoutLast);
     setError(null);
@@ -404,11 +466,19 @@ function NeurixPlatformInner({
       await streamAssistantReply(withoutLast);
     } catch (err) {
       if (err instanceof Error && err.name === "AbortError") return;
+      setStreamingId(null);
+      setMessages((prev) => {
+        const last = prev[prev.length - 1];
+        return last?.role === "assistant" && !last.content.trim()
+          ? prev.slice(0, -1)
+          : prev;
+      });
       setError(
         err instanceof Error ? err.message : "Regeneration failed.",
       );
     } finally {
       setIsLoading(false);
+      sendInFlightRef.current = false;
     }
   }, [
     chatDisabled,
@@ -423,6 +493,58 @@ function NeurixPlatformInner({
       setMessageFeedback(messageId, feedback);
     },
     [setMessageFeedback],
+  );
+
+  const sidebarConversations = useMemo(
+    () =>
+      conversations.filter(
+        (c) => conversationHasUserContent(c) || c.id === activeId,
+      ),
+    [conversations, activeId],
+  );
+
+  const scrollChatToTop = useCallback(() => {
+    const el = chatScrollRef.current;
+    if (!el) return;
+    el.scrollTo({ top: 0, behavior: "auto" });
+  }, []);
+
+  const resetEphemeralState = useCallback(() => {
+    setInput("");
+    setPendingAttachment(null);
+    setAttachmentJustAdded(false);
+    setError(null);
+    setDocTruncated(false);
+    setLastAuditFilename(undefined);
+    setShowTemplates(false);
+    setActiveSuggestionLabels(undefined);
+    setStreamingId(null);
+    setIsLoading(false);
+    setIsAnalyzingDoc(false);
+    resetUploadProgress();
+  }, [resetUploadProgress]);
+
+  const handleSelectChat = useCallback(
+    (id: string) => {
+      if (id === activeId) {
+        setSidebarOpen(false);
+        return;
+      }
+      speechController.stop();
+      stopGeneration();
+      selectChat(id);
+      resetEphemeralState();
+      setView("chat");
+      setSidebarOpen(false);
+      scrollChatToTop();
+    },
+    [
+      activeId,
+      selectChat,
+      stopGeneration,
+      resetEphemeralState,
+      scrollChatToTop,
+    ],
   );
 
   const handleExport = useCallback(async () => {
@@ -475,15 +597,14 @@ function NeurixPlatformInner({
   const handleNewChat = useCallback(() => {
     speechController.stop();
     stopGeneration();
+    sendInFlightRef.current = false;
+    abortRef.current = null;
     newChat();
-    setInput("");
-    setPendingAttachment(null);
-    setAttachmentJustAdded(false);
-    setError(null);
+    resetEphemeralState();
     setView("chat");
-    setShowTemplates(false);
-    setActiveSuggestionLabels(undefined);
-  }, [newChat, stopGeneration]);
+    setSidebarOpen(false);
+    scrollChatToTop();
+  }, [newChat, stopGeneration, resetEphemeralState, scrollChatToTop]);
 
   const openUploadFlow = useCallback(() => {
     openDocumentPicker(handleFileSelected);
@@ -498,32 +619,20 @@ function NeurixPlatformInner({
   const showLoader = (isLoading || isAnalyzingDoc) && !streamingId;
 
   if (!hydrated) {
-    return (
-      <div className="flex h-[100dvh] items-center justify-center">
-        <motion.div
-          animate={{ opacity: [0.4, 1, 0.4] }}
-          transition={{ repeat: Infinity, duration: 1.5 }}
-          className="text-sm text-purple-300"
-        >
-          Loading Neurix…
-        </motion.div>
-      </div>
-    );
+    return <ChatShellSkeleton />;
   }
 
   return (
     <div className="relative flex h-[100dvh] max-w-[100vw] flex-col overflow-x-hidden overflow-y-hidden">
-      <BackgroundOrbs />
-      <ParticleField />
-      <ParallaxGlow />
+      <BackgroundEffects />
 
       <Sidebar
         open={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
         onNewChat={handleNewChat}
-        conversations={conversations}
+        conversations={sidebarConversations}
         activeId={activeId}
-        onSelectChat={selectChat}
+        onSelectChat={handleSelectChat}
         onDeleteChat={deleteChat}
         onOpenDashboard={() => setView("dashboard")}
         aiMode={aiMode}
@@ -558,7 +667,10 @@ function NeurixPlatformInner({
             </div>
           ) : (
             <>
-              <div className="chat-scroll min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto">
+              <div
+                ref={chatScrollRef}
+                className="chat-scroll min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto"
+              >
                 {showHero ? (
                   <div className="w-full">
                     <ChatHero
@@ -586,44 +698,27 @@ function NeurixPlatformInner({
                     </div>
                   </div>
                 ) : (
-                  <div className="chat-messages-list content-shell min-w-0 space-y-6 py-4 sm:space-y-10 sm:py-8">
-                    {messages.map((msg, i) => (
-                      <ChatMessage
-                        key={msg.id}
-                        role={msg.role}
-                        content={msg.content}
-                        index={i}
-                        createdAt={msg.createdAt}
-                        kind={msg.kind}
-                        truncatedNote={
-                          msg.kind === "document-analysis" && docTruncated
-                        }
-                        projectName={auditProjectName}
-                        sourceFilename={lastAuditFilename}
-                        isStreaming={msg.id === streamingId}
-                        feedback={msg.feedback}
-                        onFeedback={(fb) =>
-                          handleMessageFeedback(msg.id, fb)
-                        }
-                        canRegenerate={
-                          i === lastAssistantIndex &&
-                          msg.role === "assistant" &&
-                          msg.id !== streamingId
-                        }
-                        onRegenerate={
-                          i === lastAssistantIndex
-                            ? handleRegenerate
-                            : undefined
-                        }
-                      />
-                    ))}
-                  </div>
+                  <ChatMessageList
+                    messages={messages}
+                    streamingId={streamingId}
+                    lastAssistantIndex={lastAssistantIndex}
+                    docTruncated={docTruncated}
+                    auditProjectName={auditProjectName}
+                    lastAuditFilename={lastAuditFilename}
+                    onFeedback={handleMessageFeedback}
+                    onRegenerate={handleRegenerate}
+                  />
                 )}
 
                 <AnimatePresence>
                   {showLoader && (
                     <div className="mx-auto w-full max-w-4xl px-4 pb-6 sm:px-6 lg:max-w-5xl lg:px-8">
-                      <TypingLoader status={loaderStatus} />
+                      <TypingLoader
+                        status={loaderStatus}
+                        uploadProgress={
+                          isAnalyzingDoc ? uploadProgress : undefined
+                        }
+                      />
                     </div>
                   )}
                 </AnimatePresence>

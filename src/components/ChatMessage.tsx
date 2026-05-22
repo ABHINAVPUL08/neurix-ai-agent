@@ -1,10 +1,31 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { motion } from "framer-motion";
 import { Bot, User, Copy, Check, RotateCcw, ThumbsUp, ThumbsDown } from "lucide-react";
 import { memo, useState } from "react";
-import { MessageMarkdown } from "@/components/chat/MessageMarkdown";
-import { DocumentAnalysisReport } from "@/components/chat/DocumentAnalysisReport";
+
+const MessageMarkdown = dynamic(
+  () =>
+    import("@/components/chat/MessageMarkdown").then((m) => m.MessageMarkdown),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="space-y-2 py-1">
+        <div className="h-3 w-full animate-pulse rounded bg-purple-500/15" />
+        <div className="h-3 w-4/5 animate-pulse rounded bg-purple-500/10" />
+      </div>
+    ),
+  },
+);
+
+const DocumentAnalysisReport = dynamic(
+  () =>
+    import("@/components/chat/DocumentAnalysisReport").then(
+      (m) => m.DocumentAnalysisReport,
+    ),
+  { ssr: false },
+);
 import { SpeechButton } from "@/components/SpeechButton";
 import { isDocumentAnalysisReport } from "@/lib/parse-document-analysis";
 import type { MessageFeedback, MessageKind, MessageRole } from "@/types/chat";

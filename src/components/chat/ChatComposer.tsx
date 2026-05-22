@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, type RefObject } from "react";
+import { memo, useRef, type RefObject } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChatInput } from "@/components/ChatInput";
 import { SuggestionChips } from "@/components/chat/SuggestionChips";
@@ -25,7 +25,7 @@ type ChatComposerProps = {
   inputRef?: RefObject<HTMLTextAreaElement | null>;
 };
 
-export function ChatComposer({
+function ChatComposerInner({
   input,
   onInputChange,
   onSubmit,
@@ -112,3 +112,5 @@ export function ChatComposer({
     </div>
   );
 }
+
+export const ChatComposer = memo(ChatComposerInner);

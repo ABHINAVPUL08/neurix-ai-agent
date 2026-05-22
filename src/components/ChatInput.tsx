@@ -2,7 +2,7 @@
 
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowUp, Square, Paperclip } from "lucide-react";
-import { FormEvent, KeyboardEvent, forwardRef, useRef } from "react";
+import { FormEvent, KeyboardEvent, forwardRef, memo, useRef } from "react";
 import { useAutoResizeTextarea } from "@/hooks/useAutoResizeTextarea";
 
 type ChatInputProps = {
@@ -16,7 +16,7 @@ type ChatInputProps = {
   canSubmit: boolean;
 };
 
-export const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(
+const ChatInputInner = forwardRef<HTMLTextAreaElement, ChatInputProps>(
   function ChatInput(
     {
       value,
@@ -134,3 +134,5 @@ export const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(
   );
   },
 );
+
+export const ChatInput = memo(ChatInputInner);
