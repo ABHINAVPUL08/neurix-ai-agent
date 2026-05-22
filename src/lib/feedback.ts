@@ -1,8 +1,16 @@
+"use client";
+
 import emailjs from "@emailjs/browser";
+import {
+  logEmailJsConfigDebug,
+  resolveEmailJsConfig,
+  type EmailJsPublicConfig,
+} from "@/lib/emailjs-env";
 
 export const FEEDBACK_SUCCESS_MESSAGE = "Feedback sent successfully";
 
-export const FEEDBACK_ERROR_MESSAGE = "Failed to send feedback";
+export const FEEDBACK_ERROR_MESSAGE =
+  "Unable to send feedback. Please try again.";
 
 export const FEEDBACK_CATEGORIES = [
   "Bug",
@@ -34,16 +42,23 @@ export type FeedbackMetadata = {
   userAgent?: string;
 };
 
-function getEmailJsConfig() {
-  const serviceId = process.env.NEXT_PUBLIC_EMAILJS_SERVICE_ID;
-  const templateId = process.env.NEXT_PUBLIC_EMAILJS_TEMPLATE_ID;
-  const publicKey = process.env.NEXT_PUBLIC_EMAILJS_PUBLIC_KEY;
+let emailJsInitialized = false;
 
-  if (!serviceId || !templateId || !publicKey) {
-    return null;
-  }
+function ensureEmailJsInit(publicKey: string): void {
+  if (emailJsInitialized) return;
+  emailjs.init({ publicKey });
+  emailJsInitialized = true;
+}
 
-  return { serviceId, templateId, publicKey };
+function configSource(
+  config: EmailJsPublicConfig,
+): "build" | "api" {
+  const fromBuild = Boolean(
+    process.env.NEXT_PUBLIC_EMAILJS_SERVICE_ID?.trim() &&
+      process.env.NEXT_PUBLIC_EMAILJS_TEMPLATE_ID?.trim() &&
+      process.env.NEXT_PUBLIC_EMAILJS_PUBLIC_KEY?.trim(),
+  );
+  return fromBuild ? "build" : "api";
 }
 
 export function collectFeedbackMetadata(): FeedbackMetadata {
@@ -90,32 +105,49 @@ export type SendFeedbackInput = {
 
 /** Sends feedback via EmailJS (template must deliver to neurix26@gmail.com). */
 export async function sendFeedback(input: SendFeedbackInput): Promise<void> {
-  const config = getEmailJsConfig();
+  const config = await resolveEmailJsConfig();
+  const source = config ? configSource(config) : "missing";
+
+  logEmailJsConfigDebug(config, source);
+
   if (!config) {
-    throw new Error("EmailJS is not configured");
+    throw new Error(
+      "EmailJS is not configured. Set NEXT_PUBLIC_EMAILJS_* in Vercel and redeploy.",
+    );
   }
+
+  ensureEmailJsInit(config.publicKey);
 
   const metadata = collectFeedbackMetadata();
   const category = formatCategoryLabel(input.categories, input.otherText);
 
-  const result = await emailjs.send(
-    config.serviceId,
-    config.templateId,
-    {
-      email: input.email,
-      message: input.message,
-      category,
-      other_text: input.otherText?.trim() ?? "",
-      page_url: metadata.page,
-      device_type: metadata.deviceType,
-      screen_size: `${metadata.screenWidth}×${metadata.screenHeight}`,
-      user_agent: metadata.userAgent ?? "",
-      submitted_at: new Date().toISOString(),
-    },
-    config.publicKey,
-  );
+  const templateParams = {
+    email: input.email,
+    message: input.message,
+    category,
+    other_text: input.otherText?.trim() ?? "",
+    page_url: metadata.page,
+    device_type: metadata.deviceType,
+    screen_size: `${metadata.screenWidth}×${metadata.screenHeight}`,
+    user_agent: metadata.userAgent ?? "",
+    submitted_at: new Date().toISOString(),
+  };
 
-  if (result.status !== 200) {
-    throw new Error(result.text || "EmailJS send failed");
+  try {
+    const result = await emailjs.send(
+      config.serviceId,
+      config.templateId,
+      templateParams,
+      config.publicKey,
+    );
+
+    console.log("[EmailJS] send status:", result.status, result.text);
+
+    if (result.status !== 200) {
+      throw new Error(result.text || "EmailJS send failed");
+    }
+  } catch (error) {
+    console.error("EmailJS Error:", error);
+    throw error;
   }
 }

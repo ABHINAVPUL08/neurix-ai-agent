@@ -150,9 +150,13 @@ export function FeedbackModal({
       onSuccess();
       onClose();
     } catch (err) {
-      console.error(err);
-      setError(FEEDBACK_ERROR_MESSAGE);
-      onError(FEEDBACK_ERROR_MESSAGE);
+      console.error("EmailJS Error:", err);
+      const message =
+        err instanceof Error && err.message.includes("not configured")
+          ? "Feedback email is not configured on this server. Contact support."
+          : FEEDBACK_ERROR_MESSAGE;
+      setError(message);
+      onError(message);
       submitLockRef.current = false;
     } finally {
       setSubmitting(false);

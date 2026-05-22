@@ -12,9 +12,9 @@ Set these in **Vercel → Project → Settings → Environment Variables**:
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `GROQ_API_KEY` | **Yes** | Groq API key for chat and document analysis |
-| `NEXT_PUBLIC_EMAILJS_SERVICE_ID` | No | Feedback form (EmailJS) |
-| `NEXT_PUBLIC_EMAILJS_TEMPLATE_ID` | No | Feedback EmailJS template |
-| `NEXT_PUBLIC_EMAILJS_PUBLIC_KEY` | No | EmailJS public key |
+| `NEXT_PUBLIC_EMAILJS_SERVICE_ID` | **Yes** (feedback) | `service_f6im496` — enable for **Production** + **Preview** |
+| `NEXT_PUBLIC_EMAILJS_TEMPLATE_ID` | **Yes** (feedback) | `template_kcy56eb` |
+| `NEXT_PUBLIC_EMAILJS_PUBLIC_KEY` | **Yes** (feedback) | EmailJS public key (not private key) |
 | `RESEND_API_KEY` | No | Consultation form email (Resend) |
 | `RESEND_FROM_EMAIL` | No | Verified sender for Resend |
 | `NEXT_PUBLIC_CALENDLY_URL` | No | Calendly embed URL |
@@ -60,6 +60,20 @@ vercel --prod
 3. Send a chat message — streaming response works.
 4. Upload a PDF under 4 MB — analysis completes.
 5. Export audit PDF — download `neurix-ai-report.pdf`.
+6. Submit feedback — success toast; email arrives at neurix26@gmail.com.
+
+## EmailJS (feedback form)
+
+1. Add all three `NEXT_PUBLIC_EMAILJS_*` variables in Vercel (names must match exactly).
+2. Check **Production** (and Preview if you test preview URLs).
+3. **Redeploy** after adding or changing env vars (`NEXT_PUBLIC_*` are baked in at build time).
+4. In [EmailJS](https://dashboard.emailjs.com/) → **Account** → **Security**, allow your domains:
+   - `localhost`
+   - `*.vercel.app`
+   - your custom production domain (e.g. `your-app.com`)
+5. Template `template_kcy56eb` must use variables: `{{email}}`, `{{message}}`, `{{category}}` and send **To:** `neurix26@gmail.com`.
+
+If feedback fails in production, open the browser console and look for `[EmailJS]` logs (service ID, template ID, public key exists).
 
 ## Troubleshooting
 
@@ -69,3 +83,6 @@ vercel --prod
 | Upload fails / 413 | Reduce file size to under 4 MB |
 | PDF export timeout | Retry; upgrade plan for longer `maxDuration` |
 | Empty PDF logo | Add `public/neurix-logo.png` and redeploy |
+| Feedback works locally, fails on Vercel | Add `NEXT_PUBLIC_EMAILJS_*` in Vercel → enable Production → **Redeploy**. Whitelist domain in EmailJS Security |
+| `[EmailJS] public key exists: false` | Env vars missing at build; set in Vercel and redeploy |
+| EmailJS 403 / domain error | Add production URL in EmailJS Account → Security |
