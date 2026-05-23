@@ -8,6 +8,10 @@ export function readServerEnv(name: string): string | undefined {
   if (value == null) return undefined;
 
   let normalized = value.trim();
+  // Strip trailing backslash from .env line continuations / bad paste
+  while (normalized.endsWith("\\")) {
+    normalized = normalized.slice(0, -1).trim();
+  }
   if (
     (normalized.startsWith('"') && normalized.endsWith('"')) ||
     (normalized.startsWith("'") && normalized.endsWith("'"))

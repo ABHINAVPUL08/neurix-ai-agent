@@ -39,9 +39,7 @@ function createChatOpenAiClient(): OpenAI {
   console.log("[chat] provider:", CHAT_AI_PROVIDER);
   console.log("[chat] selected model:", OPENAI_MODEL);
 
-  return new OpenAI({
-    apiKey: process.env["OPENAI_API_KEY"],
-  });
+  return new OpenAI({ apiKey });
 }
 
 function getChatEnvStatus() {
