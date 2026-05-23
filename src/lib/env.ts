@@ -32,6 +32,18 @@ export function getGroqApiKey(): string {
   return apiKey;
 }
 
+export function getOpenAiApiKey(): string {
+  const apiKey = process.env.OPENAI_API_KEY?.trim();
+  if (!apiKey) {
+    const hint =
+      process.env.NODE_ENV === "production" || process.env.VERCEL === "1"
+        ? "Add it in your Vercel project environment variables."
+        : "Add OPENAI_API_KEY to .env.local and restart the dev server.";
+    throw new Error(`OPENAI_API_KEY is not configured. ${hint}`);
+  }
+  return apiKey;
+}
+
 export function isProduction(): boolean {
   return process.env.NODE_ENV === "production";
 }

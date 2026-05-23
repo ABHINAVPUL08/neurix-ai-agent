@@ -30,8 +30,9 @@ function ChatMessageListInner({
       {messages.map((msg, i) => (
         <ChatMessage
           key={msg.id}
+          messageId={msg.id}
           role={msg.role}
-          content={msg.content}
+          content={msg.content ?? ""}
           index={i}
           createdAt={msg.createdAt}
           kind={msg.kind}

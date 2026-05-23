@@ -57,12 +57,16 @@ export async function fetchChatReply(
     signal,
   });
 
-  const data = await res.json();
+  const data = (await res.json()) as { message?: string; error?: string };
   if (!res.ok) {
     console.error("[chat-api] API response error:", data);
     throw new Error(data.error ?? "Failed to get AI response");
   }
-  return data.message as string;
+  const reply = typeof data.message === "string" ? data.message.trim() : "";
+  if (!reply) {
+    throw new Error("Empty response from AI");
+  }
+  return reply;
 }
 
 export type StreamChatOptions = {

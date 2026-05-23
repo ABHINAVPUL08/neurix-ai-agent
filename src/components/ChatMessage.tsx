@@ -31,6 +31,7 @@ import { isDocumentAnalysisReport } from "@/lib/parse-document-analysis";
 import type { MessageFeedback, MessageKind, MessageRole } from "@/types/chat";
 
 export type ChatMessageProps = {
+  messageId: string;
   role: MessageRole;
   content: string;
   index: number;
@@ -58,6 +59,7 @@ function chatMessagePropsEqual(
   next: ChatMessageProps,
 ): boolean {
   return (
+    prev.messageId === next.messageId &&
     prev.role === next.role &&
     prev.content === next.content &&
     prev.isStreaming === next.isStreaming &&
@@ -71,6 +73,7 @@ function chatMessagePropsEqual(
 }
 
 export const ChatMessage = memo(function ChatMessage({
+  messageId,
   role,
   content,
   index,
@@ -85,16 +88,16 @@ export const ChatMessage = memo(function ChatMessage({
   onRegenerate,
   canRegenerate,
 }: ChatMessageProps) {
+  const displayContent = content ?? "";
   const isUser = role === "user";
   const isDocReport =
     !isUser &&
     (kind === "document-analysis" ||
-      isDocumentAnalysisReport(content));
-  const messageId = `msg-${index}-${role}`;
+      isDocumentAnalysisReport(displayContent));
   const [copied, setCopied] = useState(false);
 
   const handleCopy = async () => {
-    await navigator.clipboard.writeText(content);
+    await navigator.clipboard.writeText(displayContent);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -140,11 +143,11 @@ export const ChatMessage = memo(function ChatMessage({
         >
           {isUser ? (
             <p className="break-words text-[15px] leading-[1.65] [overflow-wrap:anywhere] sm:text-base sm:leading-[1.75] lg:text-[17px]">
-              {content}
+              {displayContent}
             </p>
           ) : isDocReport ? (
             <DocumentAnalysisReport
-              content={content}
+              content={displayContent}
               isStreaming={isStreaming}
               truncatedNote={truncatedNote}
               projectName={projectName}
@@ -153,10 +156,13 @@ export const ChatMessage = memo(function ChatMessage({
           ) : (
             <div className="flex min-w-0 gap-2 sm:gap-3">
               <div className="min-w-0 flex-1 overflow-hidden">
-                <MessageMarkdown
-                  content={content || " "}
-                  className="text-[15px] leading-[1.65] sm:text-base sm:leading-[1.75] lg:text-[17px]"
-                />
+                {displayContent.trim() || isStreaming ? (
+                  <MessageMarkdown
+                    key={`${messageId}-${displayContent.length}`}
+                    content={displayContent || " "}
+                    className="text-[15px] leading-[1.65] sm:text-base sm:leading-[1.75] lg:text-[17px]"
+                  />
+                ) : null}
                 {isStreaming && (
                   <motion.span
                     className="stream-cursor ml-0.5 inline-block h-5 w-0.5 align-middle bg-purple-400"
@@ -166,8 +172,8 @@ export const ChatMessage = memo(function ChatMessage({
                   />
                 )}
               </div>
-              {!isStreaming && content && (
-                <SpeechButton messageId={messageId} text={content} />
+              {!isStreaming && displayContent.trim() && (
+                <SpeechButton messageId={messageId} text={displayContent} />
               )}
             </div>
           )}

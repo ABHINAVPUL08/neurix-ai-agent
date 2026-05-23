@@ -1,13 +1,13 @@
 # Neurix AI Agent
 
-Premium AI business consultant — automation, SaaS, voice agents, OCR pipelines, and workflow design. Built with Next.js 16, Groq, and a dark Neurix UI.
+Premium AI business consultant — automation, SaaS, voice agents, OCR pipelines, and workflow design. Built with Next.js 16, OpenAI, and a dark Neurix UI.
 
 ## Local development
 
 ```bash
 npm install
 cp .env.example .env.local
-# Add your GROQ_API_KEY to .env.local
+# Add OPENAI_API_KEY and GROQ_API_KEY to .env.local
 npm run dev
 ```
 
@@ -17,7 +17,7 @@ Open the app at the URL shown in the terminal (default `http://localhost:3000`).
 
 See **[DEPLOYMENT.md](./DEPLOYMENT.md)** for environment variables, upload limits, PDF export, and verification steps.
 
-**Required:** `GROQ_API_KEY` in Vercel project settings.
+**Required:** `OPENAI_API_KEY` (chat) and `GROQ_API_KEY` (document analysis) in Vercel project settings.
 
 **Recommended:** add `public/neurix-logo.png` for branded PDF reports.
 
@@ -37,6 +37,6 @@ See **[DEPLOYMENT.md](./DEPLOYMENT.md)** for environment variables, upload limit
 - Interactive service tiles with auto-filled workflows
 - Document upload & business audit analysis (PDF/DOCX/TXT, max 4 MB)
 - Server-side PDF export (`neurix-ai-report.pdf`)
-- Streaming chat via Groq
+- Streaming chat via OpenAI
 - Dashboard command center
 - Consultation booking (Resend or mailto fallback)

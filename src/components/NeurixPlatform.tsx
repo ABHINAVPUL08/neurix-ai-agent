@@ -226,19 +226,28 @@ function NeurixPlatformInner({
 
       const assistantMsg = createMessage("assistant", "");
       const assistantId = assistantMsg.id;
+      let streamedContent = "";
+
+      const applyAssistantContent = (content: string) => {
+        streamedContent = content;
+        setMessages((prev) => {
+          const hasAssistant = prev.some((m) => m.id === assistantId);
+          if (!hasAssistant) {
+            return [...prev, { ...assistantMsg, content }];
+          }
+          return prev.map((m) =>
+            m.id === assistantId ? { ...m, content } : m,
+          );
+        });
+      };
+
       setMessages((prev) => [...prev, assistantMsg]);
       setStreamingId(assistantId);
       setIsLoading(false);
 
       const { push: appendChunk, flushNow: flushStreamChunks } =
         createBatchedContentUpdater((delta) => {
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === assistantId
-                ? { ...m, content: m.content + delta }
-                : m,
-            ),
-          );
+          applyAssistantContent(streamedContent + delta);
         });
 
       await new Promise<void>((resolve, reject) => {
@@ -254,6 +263,17 @@ function NeurixPlatformInner({
       });
 
       flushStreamChunks();
+
+      if (!streamedContent.trim() && !controller.signal.aborted) {
+        const reply = await fetchChatReply(
+          history,
+          aiMode,
+          WELCOME_ID,
+          controller.signal,
+        );
+        applyAssistantContent(reply);
+      }
+
       setStreamingId(null);
       abortRef.current = null;
     },
@@ -421,13 +441,17 @@ function NeurixPlatformInner({
               WELCOME_ID,
               abortRef.current?.signal,
             );
+            if (!reply?.trim()) {
+              throw new Error("Empty response from AI");
+            }
             setMessages((prev) => {
               const last = prev[prev.length - 1];
-              const withoutPartial =
-                last?.role === "assistant" && !last.content.trim()
-                  ? prev.slice(0, -1)
-                  : prev;
-              return [...withoutPartial, createMessage("assistant", reply)];
+              if (last?.role === "assistant") {
+                return prev.map((m, i) =>
+                  i === prev.length - 1 ? { ...m, content: reply } : m,
+                );
+              }
+              return [...prev, createMessage("assistant", reply)];
             });
           } catch {
             setError(

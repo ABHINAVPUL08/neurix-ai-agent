@@ -1,15 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import {
-  APIError,
-  AuthenticationError,
-  BadRequestError,
-  RateLimitError,
-} from "groq-sdk";
+import OpenAI from "openai";
 import { buildModeSystemAddon, resolveAiMode } from "@/lib/ai-modes";
 import {
-  GROQ_MAX_TOKENS,
-  GROQ_MODEL,
-  GROQ_TEMPERATURE,
+  OPENAI_MAX_TOKENS,
+  OPENAI_MODEL,
+  OPENAI_TEMPERATURE,
   NEURIX_SYSTEM_PROMPT,
 } from "@/lib/constants";
 import {
@@ -17,7 +12,7 @@ import {
   validateChatMessages,
 } from "@/lib/api/limits";
 import { logger } from "@/lib/logger";
-import { getGroqClient } from "@/lib/groq";
+import { getOpenAiClient } from "@/lib/openai";
 
 export type ChatMessage = {
   role: "user" | "assistant";
@@ -30,7 +25,7 @@ type ErrorPayload = {
 };
 
 function resolveChatError(error: unknown): { status: number; body: ErrorPayload } {
-  if (error instanceof RateLimitError) {
+  if (error instanceof OpenAI.RateLimitError) {
     return {
       status: 429,
       body: {
@@ -40,7 +35,7 @@ function resolveChatError(error: unknown): { status: number; body: ErrorPayload 
     };
   }
 
-  if (error instanceof AuthenticationError) {
+  if (error instanceof OpenAI.AuthenticationError) {
     return {
       status: 401,
       body: {
@@ -50,7 +45,7 @@ function resolveChatError(error: unknown): { status: number; body: ErrorPayload 
     };
   }
 
-  if (error instanceof BadRequestError) {
+  if (error instanceof OpenAI.BadRequestError) {
     return {
       status: 400,
       body: {
@@ -60,12 +55,12 @@ function resolveChatError(error: unknown): { status: number; body: ErrorPayload 
     };
   }
 
-  if (error instanceof APIError) {
+  if (error instanceof OpenAI.APIError) {
     return {
       status: error.status ?? 502,
       body: {
-        error: error.message || "Groq API error. Please try again.",
-        code: "groq_api_error",
+        error: error.message || "OpenAI API error. Please try again.",
+        code: "openai_api_error",
       },
     };
   }
@@ -80,7 +75,7 @@ function resolveChatError(error: unknown): { status: number; body: ErrorPayload 
   const message =
     error instanceof Error ? error.message : "Internal server error";
 
-  if (message.includes("GROQ_API_KEY")) {
+  if (message.includes("OPENAI_API_KEY")) {
     return {
       status: 503,
       body: { error: message, code: "missing_api_key" },
@@ -114,26 +109,26 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const groq = getGroqClient();
+    const openai = getOpenAiClient();
     const systemPrompt = NEURIX_SYSTEM_PROMPT + buildModeSystemAddon(mode);
 
-    const groqMessages = [
-      { role: "system" as const, content: systemPrompt },
+    const chatMessages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
+      { role: "system", content: systemPrompt },
       ...messages.map((m) => ({
         role: m.role,
         content: m.content,
       })),
     ];
 
-    console.log("[chat] messages:", groqMessages);
-    console.log("[chat] selected model:", GROQ_MODEL);
+    console.log("[chat] messages:", chatMessages);
+    console.log("[chat] selected model:", OPENAI_MODEL);
 
     if (stream) {
-      const completion = await groq.chat.completions.create({
-        model: GROQ_MODEL,
-        messages: groqMessages,
-        temperature: GROQ_TEMPERATURE,
-        max_tokens: GROQ_MAX_TOKENS,
+      const completion = await openai.chat.completions.create({
+        model: OPENAI_MODEL,
+        messages: chatMessages,
+        temperature: OPENAI_TEMPERATURE,
+        max_tokens: OPENAI_MAX_TOKENS,
         stream: true,
       });
 
@@ -153,6 +148,7 @@ export async function POST(request: NextRequest) {
             controller.enqueue(encoder.encode("data: [DONE]\n\n"));
             controller.close();
           } catch (err) {
+            console.error("[chat] API response error:", err);
             const message =
               err instanceof Error ? err.message : "Stream error";
             controller.enqueue(
@@ -174,11 +170,11 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const completion = await groq.chat.completions.create({
-      model: GROQ_MODEL,
-      messages: groqMessages,
-      temperature: GROQ_TEMPERATURE,
-      max_tokens: GROQ_MAX_TOKENS,
+    const completion = await openai.chat.completions.create({
+      model: OPENAI_MODEL,
+      messages: chatMessages,
+      temperature: OPENAI_TEMPERATURE,
+      max_tokens: OPENAI_MAX_TOKENS,
     });
 
     const reply = completion.choices[0]?.message?.content?.trim();

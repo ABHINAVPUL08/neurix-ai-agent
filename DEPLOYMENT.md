@@ -3,7 +3,8 @@
 ## Prerequisites
 
 - [Vercel](https://vercel.com) account
-- [Groq API key](https://console.groq.com)
+- [OpenAI API key](https://platform.openai.com/api-keys)
+- [Groq API key](https://console.groq.com) (document analysis only)
 
 ## Environment variables
 
@@ -11,7 +12,8 @@ Set these in **Vercel → Project → Settings → Environment Variables**:
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `GROQ_API_KEY` | **Yes** | Groq API key for chat and document analysis |
+| `OPENAI_API_KEY` | **Yes** | OpenAI API key for chat |
+| `GROQ_API_KEY` | **Yes** | Groq API key for document analysis |
 | `NEXT_PUBLIC_EMAILJS_SERVICE_ID` | **Yes** (feedback) | `service_f6im496` — enable for **Production** + **Preview** |
 | `NEXT_PUBLIC_EMAILJS_TEMPLATE_ID` | **Yes** (feedback) | `template_kcy56eb` |
 | `NEXT_PUBLIC_EMAILJS_PUBLIC_KEY` | **Yes** (feedback) | EmailJS public key (not private key) |
@@ -35,7 +37,7 @@ Supported: `.png`, `.jpg`, `.webp`. PDF export works without it (text fallback o
 
 1. Push the repo to GitHub/GitLab/Bitbucket.
 2. Import the project in Vercel (root: `neurix-ai-agent` if monorepo).
-3. Add `GROQ_API_KEY`.
+3. Add `OPENAI_API_KEY` and `GROQ_API_KEY`.
 4. Deploy.
 
 Or use the CLI:
@@ -79,7 +81,7 @@ If feedback fails in production, open the browser console and look for `[EmailJS
 
 | Issue | Fix |
 |-------|-----|
-| `503` / missing API key | Add `GROQ_API_KEY` in Vercel env, redeploy |
+| `503` / missing API key | Add `OPENAI_API_KEY` (chat) and `GROQ_API_KEY` (document analysis) in Vercel env, redeploy |
 | Upload fails / 413 | Reduce file size to under 4 MB |
 | PDF export timeout | Retry; upgrade plan for longer `maxDuration` |
 | Empty PDF logo | Add `public/neurix-logo.png` and redeploy |
