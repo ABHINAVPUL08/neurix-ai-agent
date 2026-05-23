@@ -37,49 +37,12 @@ export function normalizeEnvValue(
   return normalized || undefined;
 }
 
-export type AiEnvDiagnostics = {
-  openAiKeyConfigured: boolean;
-  openAiKeyLength: number;
-  groqKeyConfigured: boolean;
-  nodeEnv: string | undefined;
-  vercelEnv: string | undefined;
-  vercel: boolean;
-  runtime: "server";
-};
-
-/** Safe diagnostics for server logs / health checks — never exposes secret values. */
-export function getOpenAiEnvDiagnostics(): AiEnvDiagnostics {
-  const openAiKey = normalizeEnvValue(process.env.OPENAI_API_KEY);
-  return {
-    openAiKeyConfigured: Boolean(openAiKey),
-    openAiKeyLength: openAiKey?.length ?? 0,
-    groqKeyConfigured: Boolean(normalizeEnvValue(process.env.GROQ_API_KEY)),
-    nodeEnv: process.env.NODE_ENV,
-    vercelEnv: process.env.VERCEL_ENV,
-    vercel: process.env.VERCEL === "1",
-    runtime: "server",
-  };
-}
-
 export function getGroqApiKey(): string {
   const apiKey = normalizeEnvValue(process.env.GROQ_API_KEY);
   if (!apiKey) {
     throw new Error(
       "GROQ_API_KEY is not configured. Add it in your Vercel project environment variables.",
     );
-  }
-  return apiKey;
-}
-
-export function getOpenAiApiKey(): string {
-  const apiKey = normalizeEnvValue(process.env.OPENAI_API_KEY);
-  if (!apiKey) {
-    const onVercel =
-      process.env.VERCEL === "1" || process.env.NODE_ENV === "production";
-    const hint = onVercel
-      ? "Add OPENAI_API_KEY in Vercel → Settings → Environment Variables (enable Production), then redeploy. Env changes are not applied until a new deployment completes."
-      : "Add OPENAI_API_KEY to .env.local and restart the dev server.";
-    throw new Error(`OPENAI_API_KEY is not configured. ${hint}`);
   }
   return apiKey;
 }

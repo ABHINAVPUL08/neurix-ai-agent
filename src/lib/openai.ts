@@ -1,17 +1,41 @@
 import OpenAI from "openai";
-import { getOpenAiApiKey, getOpenAiEnvDiagnostics } from "@/lib/env";
+import { normalizeEnvValue } from "@/lib/env";
 import { OPENAI_MODEL } from "@/lib/constants";
 
 export const CHAT_AI_PROVIDER = "openai" as const;
 
-/** Server-side OpenAI client (chat API route only). Reads process.env.OPENAI_API_KEY at call time. */
-export function getOpenAiClient(): OpenAI {
-  const diagnostics = getOpenAiEnvDiagnostics();
+function readOpenAiApiKey(): string {
+  console.log("OPENAI KEY EXISTS:", !!process.env.OPENAI_API_KEY);
+
+  const apiKey = normalizeEnvValue(process.env.OPENAI_API_KEY);
+  if (!apiKey) {
+    throw new Error(
+      "OPENAI_API_KEY is not configured. Add it in Vercel (Production) and redeploy.",
+    );
+  }
+
+  if (apiKey.startsWith("gsk_")) {
+    throw new Error(
+      "OPENAI_API_KEY looks like a Groq key (gsk_). Set a valid OpenAI key (sk-...) in Vercel.",
+    );
+  }
+
+  if (!apiKey.startsWith("sk-")) {
+    throw new Error(
+      "OPENAI_API_KEY format is invalid. OpenAI keys start with sk-.",
+    );
+  }
+
+  return apiKey;
+}
+
+/** Server-side OpenAI client for /api/chat only. */
+export function createOpenAiClient(): OpenAI {
+  const apiKey = readOpenAiApiKey();
+
   console.log("[chat] provider:", CHAT_AI_PROVIDER);
   console.log("[chat] selected model:", OPENAI_MODEL);
-  console.log("[chat] OPENAI_API_KEY exists:", diagnostics.openAiKeyConfigured);
-  console.log("[chat] env diagnostics:", diagnostics);
+  console.log("[chat] OPENAI_API_KEY length:", apiKey.length);
 
-  const apiKey = getOpenAiApiKey();
   return new OpenAI({ apiKey });
 }

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import OpenAI from "openai";
 import { buildModeSystemAddon, resolveAiMode } from "@/lib/ai-modes";
+import { resolveChatError } from "@/lib/chat-errors";
 import {
   OPENAI_MAX_TOKENS,
   OPENAI_MODEL,
@@ -11,141 +11,70 @@ import {
   sanitizeChatMessages,
   validateChatMessages,
 } from "@/lib/api/limits";
+import { normalizeEnvValue } from "@/lib/env";
 import { logger } from "@/lib/logger";
-import { CHAT_AI_PROVIDER, getOpenAiClient } from "@/lib/openai";
-import { getOpenAiEnvDiagnostics } from "@/lib/env";
+import { CHAT_AI_PROVIDER, createOpenAiClient } from "@/lib/openai";
+import type OpenAI from "openai";
 
 export type ChatMessage = {
   role: "user" | "assistant";
   content: string;
 };
 
-type ErrorPayload = {
-  error: string;
-  code?: string;
-};
-
-function resolveChatError(error: unknown): { status: number; body: ErrorPayload } {
-  if (error instanceof OpenAI.RateLimitError) {
-    return {
-      status: 429,
-      body: {
-        error: "Rate limit exceeded. Please wait a moment and try again.",
-        code: "rate_limit",
-      },
-    };
-  }
-
-  if (error instanceof OpenAI.AuthenticationError) {
-    return {
-      status: 401,
-      body: {
-        error: "AI service is not configured. Contact support.",
-        code: "invalid_api_key",
-      },
-    };
-  }
-
-  if (error instanceof OpenAI.BadRequestError) {
-    return {
-      status: 400,
-      body: {
-        error: error.message || "Invalid chat request.",
-        code: "invalid_request",
-      },
-    };
-  }
-
-  if (error instanceof OpenAI.APIError) {
-    return {
-      status: error.status ?? 502,
-      body: {
-        error: error.message || "OpenAI API error. Please try again.",
-        code: "openai_api_error",
-      },
-    };
-  }
-
-  if (error instanceof SyntaxError) {
-    return {
-      status: 400,
-      body: { error: "Invalid JSON body.", code: "invalid_request" },
-    };
-  }
-
-  const message =
-    error instanceof Error ? error.message : "Internal server error";
-
-  if (message.includes("OPENAI_API_KEY")) {
-    return {
-      status: 503,
-      body: { error: message, code: "missing_api_key" },
-    };
-  }
-
-  return {
-    status: 500,
-    body: { error: message, code: "internal_error" },
-  };
-}
-
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
+function getChatEnvStatus() {
+  const key = normalizeEnvValue(process.env.OPENAI_API_KEY);
+  return {
+    openAiKeyConfigured: Boolean(key),
+    openAiKeyLength: key?.length ?? 0,
+    openAiKeyLooksValid: Boolean(key?.startsWith("sk-")),
+    provider: CHAT_AI_PROVIDER,
+    model: OPENAI_MODEL,
+    vercelEnv: process.env.VERCEL_ENV ?? null,
+    runtime: "nodejs" as const,
+  };
+}
+
 /** Safe production health check — confirms server env without exposing secrets. */
 export async function GET() {
-  const diagnostics = getOpenAiEnvDiagnostics();
-
-  console.log("[chat] GET health check:", {
-    provider: CHAT_AI_PROVIDER,
-    model: OPENAI_MODEL,
-    openAiKeyExists: diagnostics.openAiKeyConfigured,
-    ...diagnostics,
-  });
+  const status = getChatEnvStatus();
+  console.log("OPENAI KEY EXISTS:", !!process.env.OPENAI_API_KEY);
+  console.log("[chat] GET health:", status);
 
   return NextResponse.json({
-    ok: diagnostics.openAiKeyConfigured,
-    provider: CHAT_AI_PROVIDER,
-    model: OPENAI_MODEL,
-    openAiKeyConfigured: diagnostics.openAiKeyConfigured,
-    groqKeyConfigured: diagnostics.groqKeyConfigured,
-    vercelEnv: diagnostics.vercelEnv ?? null,
-    runtime: "nodejs",
-    hint: diagnostics.openAiKeyConfigured
-      ? null
-      : "Set OPENAI_API_KEY in Vercel (Production scope) and redeploy.",
+    ok: status.openAiKeyConfigured && status.openAiKeyLooksValid,
+    ...status,
+    hint:
+      status.openAiKeyConfigured && status.openAiKeyLooksValid
+        ? null
+        : "Set a valid OpenAI sk- key as OPENAI_API_KEY in Vercel (Production) and redeploy.",
   });
 }
 
 export async function POST(request: NextRequest) {
   try {
+    console.log("OPENAI KEY EXISTS:", !!process.env.OPENAI_API_KEY);
+
     const body = await request.json();
     const messages = sanitizeChatMessages(body?.messages);
     const mode = resolveAiMode(body?.mode as string | undefined);
     const stream = body?.stream === true;
 
-    const diagnostics = getOpenAiEnvDiagnostics();
-    console.log("[chat] POST start:", {
-      provider: CHAT_AI_PROVIDER,
-      model: OPENAI_MODEL,
-      openAiKeyExists: diagnostics.openAiKeyConfigured,
-      stream,
-      vercelEnv: diagnostics.vercelEnv,
-    });
+    const envStatus = getChatEnvStatus();
+    console.log("[chat] POST start:", { ...envStatus, stream });
 
     const validationError = validateChatMessages(messages);
     if (validationError) {
-      console.log("[chat] validation failed:", validationError, {
-        messages,
-      });
       return NextResponse.json(
         { error: validationError, code: "invalid_request" },
         { status: 400 },
       );
     }
 
-    const openai = getOpenAiClient();
+    const openai = createOpenAiClient();
     const systemPrompt = NEURIX_SYSTEM_PROMPT + buildModeSystemAddon(mode);
 
     const chatMessages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
@@ -156,13 +85,8 @@ export async function POST(request: NextRequest) {
       })),
     ];
 
-    console.log("[chat] messages:", chatMessages);
     console.log("[chat] provider:", CHAT_AI_PROVIDER);
     console.log("[chat] selected model:", OPENAI_MODEL);
-    console.log(
-      "[chat] OPENAI_API_KEY exists:",
-      getOpenAiEnvDiagnostics().openAiKeyConfigured,
-    );
 
     if (stream) {
       const completion = await openai.chat.completions.create({
@@ -189,12 +113,11 @@ export async function POST(request: NextRequest) {
             controller.enqueue(encoder.encode("data: [DONE]\n\n"));
             controller.close();
           } catch (err) {
-            console.error("[chat] API response error:", err);
-            const message =
-              err instanceof Error ? err.message : "Stream error";
+            console.error("[chat] stream error:", err);
+            const { body: errorBody } = resolveChatError(err);
             controller.enqueue(
               encoder.encode(
-                `data: ${JSON.stringify({ error: message })}\n\n`,
+                `data: ${JSON.stringify({ error: errorBody.error })}\n\n`,
               ),
             );
             controller.close();
