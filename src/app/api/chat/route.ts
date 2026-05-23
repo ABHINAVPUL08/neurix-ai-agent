@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import OpenAI from "openai";
 import { buildModeSystemAddon, resolveAiMode } from "@/lib/ai-modes";
 import { resolveChatError } from "@/lib/chat-errors";
 import {
@@ -11,10 +12,10 @@ import {
   sanitizeChatMessages,
   validateChatMessages,
 } from "@/lib/api/limits";
-import { normalizeEnvValue } from "@/lib/env";
 import { logger } from "@/lib/logger";
-import { CHAT_AI_PROVIDER, createOpenAiClient } from "@/lib/openai";
-import type OpenAI from "openai";
+import { logOpenAiEnv, readOpenAiApiKey } from "@/lib/server-env";
+
+export const CHAT_AI_PROVIDER = "openai" as const;
 
 export type ChatMessage = {
   role: "user" | "assistant";
@@ -25,12 +26,29 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
+function createChatOpenAiClient(): OpenAI {
+  logOpenAiEnv();
+
+  const apiKey = readOpenAiApiKey();
+  if (!apiKey) {
+    throw new Error(
+      "OPENAI_API_KEY is not configured. Add it in Vercel Production and redeploy.",
+    );
+  }
+
+  console.log("[chat] provider:", CHAT_AI_PROVIDER);
+  console.log("[chat] selected model:", OPENAI_MODEL);
+
+  return new OpenAI({
+    apiKey: process.env["OPENAI_API_KEY"],
+  });
+}
+
 function getChatEnvStatus() {
-  const key = normalizeEnvValue(process.env.OPENAI_API_KEY);
+  const key = readOpenAiApiKey();
   return {
     openAiKeyConfigured: Boolean(key),
     openAiKeyLength: key?.length ?? 0,
-    openAiKeyLooksValid: Boolean(key?.startsWith("sk-")),
     provider: CHAT_AI_PROVIDER,
     model: OPENAI_MODEL,
     vercelEnv: process.env.VERCEL_ENV ?? null,
@@ -40,31 +58,29 @@ function getChatEnvStatus() {
 
 /** Safe production health check — confirms server env without exposing secrets. */
 export async function GET() {
+  logOpenAiEnv();
   const status = getChatEnvStatus();
-  console.log("OPENAI KEY EXISTS:", !!process.env.OPENAI_API_KEY);
   console.log("[chat] GET health:", status);
 
   return NextResponse.json({
-    ok: status.openAiKeyConfigured && status.openAiKeyLooksValid,
+    ok: status.openAiKeyConfigured,
     ...status,
-    hint:
-      status.openAiKeyConfigured && status.openAiKeyLooksValid
-        ? null
-        : "Set a valid OpenAI sk- key as OPENAI_API_KEY in Vercel (Production) and redeploy.",
+    hint: status.openAiKeyConfigured
+      ? null
+      : "Set OPENAI_API_KEY in Vercel (Production) and redeploy.",
   });
 }
 
 export async function POST(request: NextRequest) {
   try {
-    console.log("OPENAI KEY EXISTS:", !!process.env.OPENAI_API_KEY);
+    logOpenAiEnv();
 
     const body = await request.json();
     const messages = sanitizeChatMessages(body?.messages);
     const mode = resolveAiMode(body?.mode as string | undefined);
     const stream = body?.stream === true;
 
-    const envStatus = getChatEnvStatus();
-    console.log("[chat] POST start:", { ...envStatus, stream });
+    console.log("[chat] POST start:", { ...getChatEnvStatus(), stream });
 
     const validationError = validateChatMessages(messages);
     if (validationError) {
@@ -74,7 +90,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const openai = createOpenAiClient();
+    const openai = createChatOpenAiClient();
     const systemPrompt = NEURIX_SYSTEM_PROMPT + buildModeSystemAddon(mode);
 
     const chatMessages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
@@ -84,9 +100,6 @@ export async function POST(request: NextRequest) {
         content: m.content,
       })),
     ];
-
-    console.log("[chat] provider:", CHAT_AI_PROVIDER);
-    console.log("[chat] selected model:", OPENAI_MODEL);
 
     if (stream) {
       const completion = await openai.chat.completions.create({

@@ -1,59 +1,81 @@
-import OpenAI from "openai";
-
 export type ChatErrorPayload = {
   error: string;
   code?: string;
 };
 
+type ApiLikeError = {
+  status?: number;
+  message?: string;
+  code?: string;
+};
+
+function asApiError(error: unknown): ApiLikeError | null {
+  if (!error || typeof error !== "object") return null;
+  const e = error as ApiLikeError;
+  return {
+    status: typeof e.status === "number" ? e.status : undefined,
+    message: typeof e.message === "string" ? e.message : undefined,
+    code: typeof e.code === "string" ? e.code : undefined,
+  };
+}
+
+function errorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (typeof error === "string") return error;
+  return "Unknown error";
+}
+
+/** Resolve chat API errors — never returns generic "AI service is not configured". */
 export function resolveChatError(error: unknown): {
   status: number;
   body: ChatErrorPayload;
 } {
-  if (error instanceof OpenAI.RateLimitError) {
+  const message = errorMessage(error);
+  const api = asApiError(error);
+
+  console.error("[chat] resolveChatError:", {
+    message,
+    status: api?.status,
+    code: api?.code,
+  });
+
+  if (api?.status === 429) {
     return {
       status: 429,
       body: {
-        error: "Rate limit exceeded. Please wait a moment and try again.",
+        error: api.message ?? "Rate limit exceeded. Please wait and try again.",
         code: "rate_limit",
       },
     };
   }
 
-  const isAuthError =
-    error instanceof OpenAI.AuthenticationError ||
-    (error instanceof OpenAI.APIError && error.status === 401);
-
-  if (isAuthError) {
-    const message =
-      error instanceof Error
-        ? error.message
-        : "Invalid OpenAI API key.";
-    console.error("[chat] OpenAI authentication failed:", message);
+  if (api?.status === 401) {
     return {
       status: 401,
       body: {
-        error: `OpenAI authentication failed: ${message}. Verify OPENAI_API_KEY in Vercel.`,
+        error:
+          api.message ??
+          "OpenAI rejected the API key. Verify OPENAI_API_KEY in Vercel Production and redeploy.",
         code: "invalid_api_key",
       },
     };
   }
 
-  if (error instanceof OpenAI.BadRequestError) {
+  if (api?.status === 400) {
     return {
       status: 400,
       body: {
-        error: error.message || "Invalid chat request.",
+        error: api.message ?? "Invalid chat request.",
         code: "invalid_request",
       },
     };
   }
 
-  if (error instanceof OpenAI.APIError) {
-    console.error("[chat] OpenAI API error:", error.status, error.message);
+  if (api?.status != null && api.status >= 400) {
     return {
-      status: error.status ?? 502,
+      status: api.status,
       body: {
-        error: error.message || "OpenAI API error. Please try again.",
+        error: api.message ?? `OpenAI API error (${api.status}).`,
         code: "openai_api_error",
       },
     };
@@ -65,9 +87,6 @@ export function resolveChatError(error: unknown): {
       body: { error: "Invalid JSON body.", code: "invalid_request" },
     };
   }
-
-  const message =
-    error instanceof Error ? error.message : "Internal server error";
 
   if (message.includes("OPENAI_API_KEY")) {
     return {

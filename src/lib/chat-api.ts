@@ -76,7 +76,7 @@ export type StreamChatOptions = {
   signal?: AbortSignal;
 };
 
-/** Stream Groq response via SSE with optional abort */
+/** Stream OpenAI response via SSE with optional abort */
 export async function fetchChatReplyStream(
   messages: ChatMessageItem[],
   mode: AiModeId,
