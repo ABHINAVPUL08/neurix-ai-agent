@@ -12,7 +12,7 @@ Set these in **Vercel → Project → Settings → Environment Variables**:
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `OPENAI_API_KEY` | **Yes** | OpenAI API key for chat |
+| `OPENAI_API_KEY` | **Yes** | OpenAI API key for chat (server-only — **no** `NEXT_PUBLIC_` prefix) |
 | `GROQ_API_KEY` | **Yes** | Groq API key for document analysis |
 | `NEXT_PUBLIC_EMAILJS_SERVICE_ID` | **Yes** (feedback) | `service_f6im496` — enable for **Production** + **Preview** |
 | `NEXT_PUBLIC_EMAILJS_TEMPLATE_ID` | **Yes** (feedback) | `template_kcy56eb` |
@@ -38,7 +38,8 @@ Supported: `.png`, `.jpg`, `.webp`. PDF export works without it (text fallback o
 1. Push the repo to GitHub/GitLab/Bitbucket.
 2. Import the project in Vercel (root: `neurix-ai-agent` if monorepo).
 3. Add `OPENAI_API_KEY` and `GROQ_API_KEY`.
-4. Deploy.
+4. Enable **Production** (and Preview if needed) for each variable.
+5. **Redeploy** after adding or changing env vars — Vercel does not apply new secrets to existing deployments until you redeploy.
 
 Or use the CLI:
 
@@ -63,6 +64,7 @@ vercel --prod
 4. Upload a PDF under 4 MB — analysis completes.
 5. Export audit PDF — download `neurix-ai-report.pdf`.
 6. Submit feedback — success toast; email arrives at neurix26@gmail.com.
+7. Open `https://your-domain.vercel.app/api/chat` — should return `{ "ok": true, "openAiKeyConfigured": true, ... }`.
 
 ## EmailJS (feedback form)
 
@@ -81,7 +83,7 @@ If feedback fails in production, open the browser console and look for `[EmailJS
 
 | Issue | Fix |
 |-------|-----|
-| `503` / missing API key | Add `OPENAI_API_KEY` (chat) and `GROQ_API_KEY` (document analysis) in Vercel env, redeploy |
+| `503` / missing API key | Add `OPENAI_API_KEY` (chat) and `GROQ_API_KEY` (document analysis) in Vercel env with **Production** checked, then **Redeploy**. Visit `/api/chat` to verify `openAiKeyConfigured: true` |
 | Upload fails / 413 | Reduce file size to under 4 MB |
 | PDF export timeout | Retry; upgrade plan for longer `maxDuration` |
 | Empty PDF logo | Add `public/neurix-logo.png` and redeploy |

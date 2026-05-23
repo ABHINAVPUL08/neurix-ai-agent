@@ -12,7 +12,8 @@ import {
   validateChatMessages,
 } from "@/lib/api/limits";
 import { logger } from "@/lib/logger";
-import { getOpenAiClient } from "@/lib/openai";
+import { CHAT_AI_PROVIDER, getOpenAiClient } from "@/lib/openai";
+import { getOpenAiEnvDiagnostics } from "@/lib/env";
 
 export type ChatMessage = {
   role: "user" | "assistant";
@@ -89,7 +90,33 @@ function resolveChatError(error: unknown): { status: number; body: ErrorPayload 
 }
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 export const maxDuration = 60;
+
+/** Safe production health check — confirms server env without exposing secrets. */
+export async function GET() {
+  const diagnostics = getOpenAiEnvDiagnostics();
+
+  console.log("[chat] GET health check:", {
+    provider: CHAT_AI_PROVIDER,
+    model: OPENAI_MODEL,
+    openAiKeyExists: diagnostics.openAiKeyConfigured,
+    ...diagnostics,
+  });
+
+  return NextResponse.json({
+    ok: diagnostics.openAiKeyConfigured,
+    provider: CHAT_AI_PROVIDER,
+    model: OPENAI_MODEL,
+    openAiKeyConfigured: diagnostics.openAiKeyConfigured,
+    groqKeyConfigured: diagnostics.groqKeyConfigured,
+    vercelEnv: diagnostics.vercelEnv ?? null,
+    runtime: "nodejs",
+    hint: diagnostics.openAiKeyConfigured
+      ? null
+      : "Set OPENAI_API_KEY in Vercel (Production scope) and redeploy.",
+  });
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -97,6 +124,15 @@ export async function POST(request: NextRequest) {
     const messages = sanitizeChatMessages(body?.messages);
     const mode = resolveAiMode(body?.mode as string | undefined);
     const stream = body?.stream === true;
+
+    const diagnostics = getOpenAiEnvDiagnostics();
+    console.log("[chat] POST start:", {
+      provider: CHAT_AI_PROVIDER,
+      model: OPENAI_MODEL,
+      openAiKeyExists: diagnostics.openAiKeyConfigured,
+      stream,
+      vercelEnv: diagnostics.vercelEnv,
+    });
 
     const validationError = validateChatMessages(messages);
     if (validationError) {
@@ -121,7 +157,12 @@ export async function POST(request: NextRequest) {
     ];
 
     console.log("[chat] messages:", chatMessages);
+    console.log("[chat] provider:", CHAT_AI_PROVIDER);
     console.log("[chat] selected model:", OPENAI_MODEL);
+    console.log(
+      "[chat] OPENAI_API_KEY exists:",
+      getOpenAiEnvDiagnostics().openAiKeyConfigured,
+    );
 
     if (stream) {
       const completion = await openai.chat.completions.create({
