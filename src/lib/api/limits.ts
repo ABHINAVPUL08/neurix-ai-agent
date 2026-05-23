@@ -9,6 +9,27 @@ export type ChatMessagePayload = {
   content: string;
 };
 
+/** Normalize client payloads: drop empty/null/undefined content and invalid roles. */
+export function sanitizeChatMessages(
+  messages: unknown,
+): ChatMessagePayload[] {
+  if (!Array.isArray(messages)) return [];
+
+  return messages
+    .map((m): ChatMessagePayload | null => {
+      if (!m || typeof m !== "object") return null;
+      const role = (m as ChatMessagePayload).role;
+      const rawContent = (m as ChatMessagePayload).content;
+      if (role !== "user" && role !== "assistant") return null;
+      if (rawContent == null) return null;
+      const content =
+        typeof rawContent === "string" ? rawContent.trim() : String(rawContent).trim();
+      if (!content) return null;
+      return { role, content };
+    })
+    .filter((m): m is ChatMessagePayload => m !== null);
+}
+
 export function validateChatMessages(
   messages: ChatMessagePayload[] | undefined,
 ): string | null {

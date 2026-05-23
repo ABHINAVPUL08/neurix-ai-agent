@@ -209,7 +209,14 @@ function NeurixPlatformInner({
     setIsAnalyzingDoc(false);
     resetUploadProgress();
     sendInFlightRef.current = false;
-  }, [resetUploadProgress]);
+    setMessages((prev) => {
+      const last = prev[prev.length - 1];
+      if (last?.role === "assistant" && !last.content.trim()) {
+        return prev.slice(0, -1);
+      }
+      return prev;
+    });
+  }, [resetUploadProgress, setMessages]);
 
   const streamAssistantReply = useCallback(
     async (history: ChatMessageItem[]) => {

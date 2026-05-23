@@ -12,7 +12,10 @@ import {
   GROQ_TEMPERATURE,
   NEURIX_SYSTEM_PROMPT,
 } from "@/lib/constants";
-import { validateChatMessages } from "@/lib/api/limits";
+import {
+  sanitizeChatMessages,
+  validateChatMessages,
+} from "@/lib/api/limits";
 import { logger } from "@/lib/logger";
 import { getGroqClient } from "@/lib/groq";
 
@@ -96,12 +99,15 @@ export const maxDuration = 60;
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const messages = body?.messages as ChatMessage[] | undefined;
+    const messages = sanitizeChatMessages(body?.messages);
     const mode = resolveAiMode(body?.mode as string | undefined);
     const stream = body?.stream === true;
 
     const validationError = validateChatMessages(messages);
     if (validationError) {
+      console.log("[chat] validation failed:", validationError, {
+        messages,
+      });
       return NextResponse.json(
         { error: validationError, code: "invalid_request" },
         { status: 400 },
@@ -113,11 +119,14 @@ export async function POST(request: NextRequest) {
 
     const groqMessages = [
       { role: "system" as const, content: systemPrompt },
-      ...messages!.map((m) => ({
-        role: m.role as "user" | "assistant",
-        content: m.content.trim(),
+      ...messages.map((m) => ({
+        role: m.role,
+        content: m.content,
       })),
     ];
+
+    console.log("[chat] messages:", groqMessages);
+    console.log("[chat] selected model:", GROQ_MODEL);
 
     if (stream) {
       const completion = await groq.chat.completions.create({
@@ -183,6 +192,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ message: reply });
   } catch (error) {
+    console.error("[chat] API response error:", error);
     logger.error("chat", error);
 
     const { status, body } = resolveChatError(error);

@@ -1,4 +1,5 @@
 import type { AiModeId } from "@/lib/ai-modes";
+import { sanitizeChatMessages } from "@/lib/api/limits";
 import type { ChatMessageItem } from "@/types/chat";
 
 function buildChatPayload(
@@ -7,13 +8,37 @@ function buildChatPayload(
   welcomeId: string,
   stream: boolean,
 ) {
+  const apiMessages = sanitizeChatMessages(
+    messages
+      .filter((m) => m.id !== welcomeId)
+      .map(({ role, content }) => ({ role, content })),
+  );
+
+  console.log("[chat-api] outgoing messages:", apiMessages);
+  console.log("[chat-api] mode:", mode);
+
   return {
     mode,
     stream,
-    messages: messages
-      .filter((m) => m.id !== welcomeId)
-      .map(({ role, content }) => ({ role, content })),
+    messages: apiMessages,
   };
+}
+
+function assertValidChatPayload(messages: { role: string; content: string }[]) {
+  if (messages.length === 0) {
+    throw new Error("No valid messages to send. Please enter a message.");
+  }
+  for (const m of messages) {
+    if (
+      (m.role !== "user" && m.role !== "assistant") ||
+      typeof m.content !== "string" ||
+      !m.content.trim()
+    ) {
+      throw new Error(
+        "Each message must have role (user|assistant) and non-empty content",
+      );
+    }
+  }
 }
 
 export async function fetchChatReply(
@@ -22,15 +47,21 @@ export async function fetchChatReply(
   welcomeId: string,
   signal?: AbortSignal,
 ): Promise<string> {
+  const payload = buildChatPayload(messages, mode, welcomeId, false);
+  assertValidChatPayload(payload.messages);
+
   const res = await fetch("/api/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(buildChatPayload(messages, mode, welcomeId, false)),
+    body: JSON.stringify(payload),
     signal,
   });
 
   const data = await res.json();
-  if (!res.ok) throw new Error(data.error ?? "Failed to get AI response");
+  if (!res.ok) {
+    console.error("[chat-api] API response error:", data);
+    throw new Error(data.error ?? "Failed to get AI response");
+  }
   return data.message as string;
 }
 
@@ -49,15 +80,19 @@ export async function fetchChatReplyStream(
   { onChunk, onDone, onError, signal }: StreamChatOptions,
 ): Promise<void> {
   try {
+    const payload = buildChatPayload(messages, mode, welcomeId, true);
+    assertValidChatPayload(payload.messages);
+
     const res = await fetch("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(buildChatPayload(messages, mode, welcomeId, true)),
+      body: JSON.stringify(payload),
       signal,
     });
 
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
+      console.error("[chat-api] API response error:", data);
       throw new Error(
         (data as { error?: string }).error ?? "Failed to get AI response",
       );
