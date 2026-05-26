@@ -24,8 +24,8 @@ export function ModeSelector({
 
   if (resolvedVariant === "header") {
     return (
-      <div className="navbar-mode-stack flex w-full max-w-full flex-col items-center justify-center">
-        <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-zinc-400 sm:tracking-[0.2em] lg:text-[11px]">
+      <div className="navbar-mode-stack mt-1.5 flex w-full max-w-full flex-col items-center justify-center sm:mt-2 lg:mt-2.5">
+        <span className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-purple-200/85 drop-shadow-[0_0_12px_rgba(168,85,247,0.35)] sm:text-xs sm:tracking-[0.24em]">
           AI Mode
         </span>
         <div className="navbar-mode-wrap relative mt-1.5 w-full max-w-[min(240px,calc(100vw-2rem))] sm:mt-2 sm:max-w-[min(280px,calc(100vw-2.5rem))] md:max-w-[320px] lg:mt-2 lg:w-[340px] lg:max-w-[340px]">
@@ -33,7 +33,7 @@ export function ModeSelector({
             value={value}
             onChange={(e) => onChange(e.target.value as AiModeId)}
             aria-label="AI Mode"
-            className={`${selectClass} navbar-mode-select h-10 w-full cursor-pointer pl-3 pr-9 text-center text-[13px] font-semibold text-purple-50 sm:h-11 sm:pl-4 sm:pr-10 sm:text-sm lg:h-[46px] lg:text-[15px]`}
+            className={`${selectClass} navbar-mode-select h-10 w-full cursor-pointer pl-3 pr-9 text-center text-sm font-bold text-purple-50 sm:h-11 sm:pl-4 sm:pr-10 sm:text-base lg:h-[46px] lg:text-[17px]`}
           >
             {AI_MODES.map((mode) => (
               <option key={mode.id} value={mode.id} className="bg-zinc-900 py-2">
@@ -43,7 +43,7 @@ export function ModeSelector({
           </select>
           <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-purple-300 sm:right-3 sm:h-4 sm:w-4 lg:right-3.5 lg:h-5 lg:w-5" />
         </div>
-        <p className="mt-1.5 max-w-[min(240px,calc(100vw-2rem))] truncate px-1 text-center text-[10px] leading-snug text-zinc-500 sm:mt-2 sm:max-w-[min(280px,calc(100vw-2.5rem))] sm:text-[11px] md:max-w-[320px] lg:max-w-[340px] lg:text-xs">
+        <p className="mt-1.5 max-w-[min(240px,calc(100vw-2rem))] truncate px-1 text-center text-[11px] font-medium leading-snug text-zinc-300/85 sm:mt-2 sm:max-w-[min(280px,calc(100vw-2.5rem))] sm:text-xs md:max-w-[320px] lg:max-w-[340px] lg:text-[13px]">
           {current.description}
         </p>
       </div>

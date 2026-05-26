@@ -12,6 +12,7 @@ export type ChatMessageListProps = {
   auditProjectName: string;
   lastAuditFilename?: string;
   onFeedback: (messageId: string, feedback: "up" | "down" | null) => void;
+  onEditUserMessage: (messageId: string, content: string) => void;
   onRegenerate: () => void;
 };
 
@@ -23,6 +24,7 @@ function ChatMessageListInner({
   auditProjectName,
   lastAuditFilename,
   onFeedback,
+  onEditUserMessage,
   onRegenerate,
 }: ChatMessageListProps) {
   return (
@@ -42,6 +44,11 @@ function ChatMessageListInner({
           isStreaming={msg.id === streamingId}
           feedback={msg.feedback}
           onFeedback={(fb) => onFeedback(msg.id, fb)}
+          onEdit={
+            msg.role === "user"
+              ? () => onEditUserMessage(msg.id, msg.content)
+              : undefined
+          }
           canRegenerate={
             i === lastAssistantIndex &&
             msg.role === "assistant" &&

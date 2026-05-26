@@ -22,6 +22,13 @@ export type ChatMessage = {
   content: string;
 };
 
+type ImageAttachmentPayload = {
+  kind?: "image";
+  name?: string;
+  mimeType?: string;
+  dataUrl?: string;
+};
+
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -54,6 +61,100 @@ function getChatEnvStatus() {
   };
 }
 
+function parseImageAttachment(value: unknown): ImageAttachmentPayload | null {
+  if (!value || typeof value !== "object") return null;
+  const attachment = value as ImageAttachmentPayload;
+  if (
+    attachment.kind !== "image" ||
+    typeof attachment.dataUrl !== "string" ||
+    typeof attachment.mimeType !== "string" ||
+    !attachment.mimeType.startsWith("image/") ||
+    !attachment.dataUrl.startsWith("data:image/")
+  ) {
+    return null;
+  }
+  return attachment;
+}
+
+function extractFirstUrl(text: string): string | null {
+  const match = text.match(/https?:\/\/[^\s<>"')]+/i);
+  if (!match) return null;
+  try {
+    return new URL(match[0]).toString();
+  } catch {
+    return null;
+  }
+}
+
+function extractMetaContent(html: string, name: string): string {
+  const regex = new RegExp(
+    `<meta[^>]+(?:name|property)=["']${name}["'][^>]+content=["']([^"']+)["'][^>]*>`,
+    "i",
+  );
+  return html.match(regex)?.[1]?.trim() ?? "";
+}
+
+async function buildWebsiteContext(url: string): Promise<string | null> {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 6000);
+    const res = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        "User-Agent": "NeurixAI/1.0 website analysis bot",
+        Accept: "text/html,application/xhtml+xml",
+      },
+    });
+    clearTimeout(timeout);
+
+    if (!res.ok) return null;
+    const html = await res.text();
+    const title = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.trim();
+    const description =
+      extractMetaContent(html, "description") ||
+      extractMetaContent(html, "og:description");
+    const text = html
+      .replace(/<script[\s\S]*?<\/script>/gi, " ")
+      .replace(/<style[\s\S]*?<\/style>/gi, " ")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 5000);
+
+    return [
+      `Website URL: ${url}`,
+      title ? `Title: ${title}` : "",
+      description ? `Description: ${description}` : "",
+      text ? `Visible page text excerpt: ${text}` : "",
+    ]
+      .filter(Boolean)
+      .join("\n");
+  } catch (error) {
+    console.warn("[chat] website analysis fetch failed:", error);
+    return null;
+  }
+}
+
+async function enrichLatestUserMessageForUrl(messages: ChatMessage[]) {
+  const lastUserIndex = messages.findLastIndex((m) => m.role === "user");
+  if (lastUserIndex < 0) return messages;
+
+  const url = extractFirstUrl(messages[lastUserIndex].content);
+  if (!url) return messages;
+
+  const websiteContext = await buildWebsiteContext(url);
+  if (!websiteContext) return messages;
+
+  return messages.map((message, index) =>
+    index === lastUserIndex
+      ? {
+          ...message,
+          content: `${message.content}\n\nWebsite context for analysis:\n${websiteContext}`,
+        }
+      : message,
+  );
+}
+
 /** Safe production health check — confirms server env without exposing secrets. */
 export async function GET() {
   logOpenAiEnv();
@@ -74,7 +175,10 @@ export async function POST(request: NextRequest) {
     logOpenAiEnv();
 
     const body = await request.json();
-    const messages = sanitizeChatMessages(body?.messages);
+    const messages = await enrichLatestUserMessageForUrl(
+      sanitizeChatMessages(body?.messages),
+    );
+    const imageAttachment = parseImageAttachment(body?.attachment);
     const mode = resolveAiMode(body?.mode as string | undefined);
     const stream = body?.stream === true;
 
@@ -91,12 +195,37 @@ export async function POST(request: NextRequest) {
     const openai = createChatOpenAiClient();
     const systemPrompt = NEURIX_SYSTEM_PROMPT + buildModeSystemAddon(mode);
 
+    const lastUserIndex = messages.findLastIndex((m) => m.role === "user");
     const chatMessages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
       { role: "system", content: systemPrompt },
-      ...messages.map((m) => ({
-        role: m.role,
-        content: m.content,
-      })),
+      ...messages.map(
+        (m, index): OpenAI.Chat.Completions.ChatCompletionMessageParam => {
+          if (m.role === "assistant") {
+            return { role: "assistant", content: m.content };
+          }
+
+          if (imageAttachment && index === lastUserIndex) {
+            return {
+              role: "user",
+              content: [
+                {
+                  type: "text",
+                  text: `${m.content}\n\nAnalyze the attached image (${imageAttachment.name ?? "upload"}) and answer the user's request with practical business, UI/UX, bug, or design feedback as relevant.`,
+                },
+                {
+                  type: "image_url",
+                  image_url: {
+                    url: imageAttachment.dataUrl!,
+                    detail: "auto",
+                  },
+                },
+              ],
+            };
+          }
+
+          return { role: "user", content: m.content };
+        },
+      ),
     ];
 
     if (stream) {

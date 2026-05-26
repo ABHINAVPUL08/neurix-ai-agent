@@ -2,11 +2,19 @@ import type { AiModeId } from "@/lib/ai-modes";
 import { sanitizeChatMessages } from "@/lib/api/limits";
 import type { ChatMessageItem } from "@/types/chat";
 
+export type ChatAttachmentPayload = {
+  kind: "image";
+  name: string;
+  mimeType: string;
+  dataUrl: string;
+};
+
 function buildChatPayload(
   messages: ChatMessageItem[],
   mode: AiModeId,
   welcomeId: string,
   stream: boolean,
+  attachment?: ChatAttachmentPayload,
 ) {
   const apiMessages = sanitizeChatMessages(
     messages
@@ -21,6 +29,7 @@ function buildChatPayload(
     mode,
     stream,
     messages: apiMessages,
+    ...(attachment ? { attachment } : {}),
   };
 }
 
@@ -46,8 +55,15 @@ export async function fetchChatReply(
   mode: AiModeId,
   welcomeId: string,
   signal?: AbortSignal,
+  attachment?: ChatAttachmentPayload,
 ): Promise<string> {
-  const payload = buildChatPayload(messages, mode, welcomeId, false);
+  const payload = buildChatPayload(
+    messages,
+    mode,
+    welcomeId,
+    false,
+    attachment,
+  );
   assertValidChatPayload(payload.messages);
 
   const res = await fetch("/api/chat", {
@@ -74,6 +90,7 @@ export type StreamChatOptions = {
   onDone: () => void;
   onError: (error: Error) => void;
   signal?: AbortSignal;
+  attachment?: ChatAttachmentPayload;
 };
 
 /** Stream OpenAI response via SSE with optional abort */
@@ -81,10 +98,16 @@ export async function fetchChatReplyStream(
   messages: ChatMessageItem[],
   mode: AiModeId,
   welcomeId: string,
-  { onChunk, onDone, onError, signal }: StreamChatOptions,
+  { onChunk, onDone, onError, signal, attachment }: StreamChatOptions,
 ): Promise<void> {
   try {
-    const payload = buildChatPayload(messages, mode, welcomeId, true);
+    const payload = buildChatPayload(
+      messages,
+      mode,
+      welcomeId,
+      true,
+      attachment,
+    );
     assertValidChatPayload(payload.messages);
 
     const res = await fetch("/api/chat", {

@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence } from "framer-motion";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BackgroundEffects } from "@/components/effects/BackgroundEffects";
 import { ChatMessageList } from "@/components/chat/ChatMessageList";
@@ -21,7 +21,12 @@ import {
 import type { AnalysisMeta } from "@/hooks/useDocumentAnalysis";
 import { useChatSessions } from "@/hooks/useChatSessions";
 import { analyzeDocumentFile } from "@/lib/analyze-document-client";
-import { fetchChatReply, fetchChatReplyStream } from "@/lib/chat-api";
+import {
+  fetchChatReply,
+  fetchChatReplyStream,
+  type ChatAttachmentPayload,
+} from "@/lib/chat-api";
+import { fileToDataUrl, isImageFile } from "@/lib/file-to-data-url";
 import { revealTextSmoothly } from "@/lib/reveal-text";
 import {
   getFeatureTile,
@@ -98,7 +103,6 @@ function NeurixPlatformInner({
     active,
     activeId,
     messages,
-    uploadedFiles,
     aiMode,
     setMessages,
     setUploadedFiles,
@@ -192,6 +196,12 @@ function NeurixPlatformInner({
   useEffect(() => {
     const now = Date.now();
     if (streamingId && now - scrollThrottleRef.current < 120) return;
+    const scrollEl = chatScrollRef.current;
+    if (scrollEl) {
+      const distanceFromBottom =
+        scrollEl.scrollHeight - scrollEl.scrollTop - scrollEl.clientHeight;
+      if (distanceFromBottom > 220) return;
+    }
     scrollThrottleRef.current = now;
     chatEndRef.current?.scrollIntoView({
       behavior: streamingId ? "auto" : "smooth",
@@ -219,7 +229,10 @@ function NeurixPlatformInner({
   }, [resetUploadProgress, setMessages]);
 
   const streamAssistantReply = useCallback(
-    async (history: ChatMessageItem[]) => {
+    async (
+      history: ChatMessageItem[],
+      attachment?: ChatAttachmentPayload,
+    ) => {
       abortRef.current?.abort();
       const controller = new AbortController();
       abortRef.current = controller;
@@ -253,6 +266,7 @@ function NeurixPlatformInner({
       await new Promise<void>((resolve, reject) => {
         fetchChatReplyStream(history, aiMode, WELCOME_ID, {
           signal: controller.signal,
+          attachment,
           onChunk: appendChunk,
           onDone: () => resolve(),
           onError: (err) => {
@@ -270,6 +284,7 @@ function NeurixPlatformInner({
           aiMode,
           WELCOME_ID,
           controller.signal,
+          attachment,
         );
         applyAssistantContent(reply);
       }
@@ -346,6 +361,19 @@ function NeurixPlatformInner({
     });
   }, []);
 
+  const handlePasteLink = useCallback(() => {
+    if (chatDisabled) return;
+    const url = window.prompt("Paste a website link for Neurix to analyze:");
+    if (!url?.trim()) return;
+    setInput(
+      `Analyze this website/business and give growth suggestions, UI/UX improvements, automation ideas, and business advice: ${url.trim()}`,
+    );
+    setView("chat");
+    setShowTemplates(false);
+    setError(null);
+    focusComposerInput();
+  }, [chatDisabled, focusComposerInput]);
+
   const handleFeatureTileSelect = useCallback(
     (tileId: FeatureTileId) => {
       if (chatDisabled) return;
@@ -382,6 +410,38 @@ function NeurixPlatformInner({
           setPendingAttachment(null);
           setAttachmentJustAdded(false);
           setInput("");
+
+          if (isImageFile(fileToSend)) {
+            const userNote = trimmed
+              ? `${trimmed}\n\n🖼️ **Image attached:** ${fileToSend.name}`
+              : `🖼️ **Image uploaded:** ${fileToSend.name}\n\nPlease analyze this image and give practical feedback.`;
+            const userMessage = createMessage("user", userNote);
+            const nextMessages = [...messages, userMessage];
+
+            setMessages(nextMessages);
+            setIsLoading(true);
+
+            try {
+              const dataUrl = await fileToDataUrl(fileToSend);
+              await streamAssistantReply(nextMessages, {
+                kind: "image",
+                name: fileToSend.name,
+                mimeType: fileToSend.type || "image/png",
+                dataUrl,
+              });
+            } catch (err) {
+              if (err instanceof Error && err.name === "AbortError") return;
+              setStreamingId(null);
+              setError(
+                err instanceof Error
+                  ? err.message
+                  : "Image analysis failed.",
+              );
+            } finally {
+              setIsLoading(false);
+            }
+            return;
+          }
 
           const userNote = trimmed
             ? `${trimmed}\n\n📄 **Attached:** ${fileToSend.name}`
@@ -518,6 +578,43 @@ function NeurixPlatformInner({
     streamAssistantReply,
     setMessages,
   ]);
+
+  const handleEditUserMessage = useCallback(
+    async (messageId: string, currentContent: string) => {
+      if (chatDisabled || sendInFlightRef.current) return;
+      const edited = window.prompt("Edit your message", currentContent);
+      const nextContent = edited?.trim();
+      if (!nextContent || nextContent === currentContent.trim()) return;
+
+      const userIndex = messages.findIndex((m) => m.id === messageId);
+      if (userIndex < 0) return;
+
+      sendInFlightRef.current = true;
+      const editedHistory = messages.slice(0, userIndex + 1).map((message) =>
+        message.id === messageId
+          ? { ...message, content: nextContent, createdAt: Date.now() }
+          : message,
+      );
+
+      setMessages(editedHistory);
+      setError(null);
+      setIsLoading(true);
+
+      try {
+        await streamAssistantReply(editedHistory);
+      } catch (err) {
+        if (err instanceof Error && err.name === "AbortError") return;
+        setStreamingId(null);
+        setError(
+          err instanceof Error ? err.message : "Could not regenerate reply.",
+        );
+      } finally {
+        setIsLoading(false);
+        sendInFlightRef.current = false;
+      }
+    },
+    [chatDisabled, messages, setMessages, streamAssistantReply],
+  );
 
   const handleMessageFeedback = useCallback(
     (messageId: string, feedback: Parameters<typeof setMessageFeedback>[1]) => {
@@ -715,7 +812,7 @@ function NeurixPlatformInner({
                       <button
                         type="button"
                         onClick={() => setShowTemplates((s) => !s)}
-                        className="text-sm font-medium text-purple-400 transition-colors hover:text-purple-200"
+                        className="rounded-full px-3 py-1.5 text-base font-semibold text-purple-200/95 transition-all hover:bg-purple-500/10 hover:text-purple-50 hover:shadow-[0_0_24px_rgba(168,85,247,0.24)]"
                       >
                         {showTemplates ? "Hide" : "Explore"} template marketplace
                       </button>
@@ -737,6 +834,7 @@ function NeurixPlatformInner({
                     auditProjectName={auditProjectName}
                     lastAuditFilename={lastAuditFilename}
                     onFeedback={handleMessageFeedback}
+                    onEditUserMessage={handleEditUserMessage}
                     onRegenerate={handleRegenerate}
                   />
                 )}
@@ -785,6 +883,7 @@ function NeurixPlatformInner({
                   setPendingAttachment(null);
                   setAttachmentJustAdded(false);
                 }}
+                onPasteLink={handlePasteLink}
                 onChipSelect={(text) => void sendMessage(text)}
                 disabled={chatDisabled}
                 isGenerating={isGenerating}

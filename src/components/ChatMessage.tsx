@@ -2,7 +2,16 @@
 
 import dynamic from "next/dynamic";
 import { motion } from "framer-motion";
-import { Bot, User, Copy, Check, RotateCcw, ThumbsUp, ThumbsDown } from "lucide-react";
+import {
+  Bot,
+  User,
+  Copy,
+  Check,
+  Pencil,
+  RotateCcw,
+  ThumbsUp,
+  ThumbsDown,
+} from "lucide-react";
 import { memo, useState } from "react";
 
 const MessageMarkdown = dynamic(
@@ -43,6 +52,7 @@ export type ChatMessageProps = {
   sourceFilename?: string;
   feedback?: MessageFeedback;
   onFeedback?: (feedback: MessageFeedback) => void;
+  onEdit?: () => void;
   onRegenerate?: () => void;
   canRegenerate?: boolean;
 };
@@ -65,6 +75,7 @@ function chatMessagePropsEqual(
     prev.isStreaming === next.isStreaming &&
     prev.feedback === next.feedback &&
     prev.canRegenerate === next.canRegenerate &&
+    prev.onEdit === next.onEdit &&
     prev.truncatedNote === next.truncatedNote &&
     prev.projectName === next.projectName &&
     prev.sourceFilename === next.sourceFilename &&
@@ -85,6 +96,7 @@ export const ChatMessage = memo(function ChatMessage({
   sourceFilename,
   feedback,
   onFeedback,
+  onEdit,
   onRegenerate,
   canRegenerate,
 }: ChatMessageProps) {
@@ -198,6 +210,16 @@ export const ChatMessage = memo(function ChatMessage({
               )}
               Copy
             </button>
+            {isUser && onEdit && (
+              <button
+                type="button"
+                onClick={onEdit}
+                className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-800/60 hover:text-purple-300"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+                Edit
+              </button>
+            )}
             {!isUser && onFeedback && (
               <>
                 <button

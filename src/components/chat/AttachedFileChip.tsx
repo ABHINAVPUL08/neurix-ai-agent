@@ -1,7 +1,8 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { FileText, X, Check } from "lucide-react";
+import { FileText, ImageIcon, X, Check } from "lucide-react";
+import { useEffect, useMemo } from "react";
 import { formatFileSize } from "@/lib/validate-document-file";
 
 type AttachedFileChipProps = {
@@ -16,6 +17,18 @@ export function AttachedFileChip({
   onRemove,
 }: AttachedFileChipProps) {
   const isPdf = file.name.toLowerCase().endsWith(".pdf");
+  const isImage =
+    file.type.startsWith("image/") || /\.(png|jpe?g|webp)$/i.test(file.name);
+  const previewUrl = useMemo(
+    () => (isImage ? URL.createObjectURL(file) : null),
+    [file, isImage],
+  );
+
+  useEffect(() => {
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    };
+  }, [previewUrl]);
 
   return (
     <motion.div
@@ -29,7 +42,7 @@ export function AttachedFileChip({
       }`}
     >
       <div
-        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${
+        className={`flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg ${
           isPdf
             ? "bg-red-500/15 ring-1 ring-red-400/30"
             : "bg-purple-500/20 ring-1 ring-purple-400/30"
@@ -37,10 +50,23 @@ export function AttachedFileChip({
       >
         {showSuccess ? (
           <Check className="h-5 w-5 text-green-400" />
-        ) : (
-          <FileText
-            className={`h-5 w-5 ${isPdf ? "text-red-300" : "text-purple-300"}`}
+        ) : previewUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={previewUrl}
+            alt=""
+            className="h-full w-full object-cover"
           />
+        ) : (
+          <>
+            {isImage ? (
+              <ImageIcon className="h-5 w-5 text-purple-300" />
+            ) : (
+              <FileText
+                className={`h-5 w-5 ${isPdf ? "text-red-300" : "text-purple-300"}`}
+              />
+            )}
+          </>
         )}
       </div>
       <div className="min-w-0 flex-1">
