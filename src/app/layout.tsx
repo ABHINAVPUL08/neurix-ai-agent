@@ -14,9 +14,13 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Neurix AI Agent",
+  title: "Neurix Solution",
   description:
     "Premium AI business consultant — automation, SaaS, voice agents & more",
+  icons: {
+    icon: "/neurix-logo.jpg",
+    apple: "/neurix-logo.jpg",
+  },
 };
 
 export const viewport = {

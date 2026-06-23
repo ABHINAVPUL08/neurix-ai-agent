@@ -1,6 +1,7 @@
 "use client";
 
 import type { ComponentType } from "react";
+import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Plus,
@@ -9,15 +10,22 @@ import {
   LayoutTemplate,
   Settings,
   X,
-  Sparkles,
   Trash2,
   LayoutDashboard,
-  Calendar,
+  CalendarClock,
+  Tag,
+  Download,
+  FileDown,
+  Volume2,
+  VolumeX,
+  Loader2,
+  ChevronDown,
 } from "lucide-react";
+import { NeurixLogo } from "@/components/brand/NeurixLogo";
 import { ModeSelector } from "@/components/chat/ModeSelector";
 import { INDUSTRY_TEMPLATES } from "@/lib/templates";
 import type { AiModeId } from "@/lib/ai-modes";
-import type { Conversation } from "@/types/chat";
+import type { AppView, Conversation } from "@/types/chat";
 
 type SidebarProps = {
   open: boolean;
@@ -28,7 +36,15 @@ type SidebarProps = {
   onSelectChat: (id: string) => void;
   onDeleteChat: (id: string) => void;
   onOpenDashboard: () => void;
-  onBookConsultation?: () => void;
+  onOpenChat: () => void;
+  view: AppView;
+  onBookCall?: () => void;
+  onOpenPricing?: () => void;
+  onExportChat?: () => void;
+  exportPdfMode?: boolean;
+  exportLoading?: boolean;
+  voiceMuted?: boolean;
+  onToggleVoiceMuted?: () => void;
   aiMode: AiModeId;
   onModeChange: (mode: AiModeId) => void;
   onTemplateSelect: (text: string) => void;
@@ -49,6 +65,76 @@ function SectionHeading({
   );
 }
 
+function SidebarAction({
+  icon: Icon,
+  label,
+  onClick,
+  disabled,
+  loading,
+}: {
+  icon: ComponentType<{ className?: string }>;
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+  loading?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled || loading}
+      className="sidebar-nav-btn flex w-full items-center gap-3 rounded-xl px-4 py-3.5 text-base font-medium text-zinc-300 transition-all hover:bg-purple-500/12 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+    >
+      {loading ? (
+        <Loader2 className="h-5 w-5 shrink-0 animate-spin text-purple-400" />
+      ) : (
+        <Icon className="h-5 w-5 shrink-0 text-purple-400" />
+      )}
+      {label}
+    </button>
+  );
+}
+
+function SidebarExpandSection({
+  icon: Icon,
+  label,
+  children,
+  defaultOpen = false,
+}: {
+  icon: ComponentType<{ className?: string }>;
+  label: string;
+  children: React.ReactNode;
+  defaultOpen?: boolean;
+}) {
+  const [pinnedOpen, setPinnedOpen] = useState(defaultOpen);
+
+  return (
+    <section className="sidebar-expand-section group mb-6 rounded-2xl border border-purple-500/20 bg-purple-950/20 p-3">
+      <button
+        type="button"
+        onClick={() => setPinnedOpen((open) => !open)}
+        className="sidebar-section-trigger flex w-full items-center gap-2.5 rounded-lg px-1 py-1 text-left text-xs font-bold uppercase tracking-widest text-purple-300/80 transition-colors hover:text-purple-100"
+        aria-expanded={pinnedOpen}
+      >
+        <Icon className="h-5 w-5 shrink-0 text-purple-400" />
+        {label}
+        <ChevronDown
+          className={`ml-auto h-4 w-4 shrink-0 text-purple-400/80 transition-transform duration-200 ${
+            pinnedOpen ? "rotate-180" : "group-hover:rotate-180"
+          }`}
+        />
+      </button>
+      <div
+        className={`sidebar-expand-panel space-y-1.5 ${
+          pinnedOpen ? "sidebar-expand-panel-open" : ""
+        }`}
+      >
+        {children}
+      </div>
+    </section>
+  );
+}
+
 export function Sidebar({
   open,
   onClose,
@@ -58,7 +144,15 @@ export function Sidebar({
   onSelectChat,
   onDeleteChat,
   onOpenDashboard,
-  onBookConsultation,
+  onOpenChat,
+  view,
+  onBookCall,
+  onOpenPricing,
+  onExportChat,
+  exportPdfMode,
+  exportLoading,
+  voiceMuted = false,
+  onToggleVoiceMuted,
   aiMode,
   onModeChange,
   onTemplateSelect,
@@ -107,11 +201,9 @@ export function Sidebar({
             <div className="flex h-full flex-col px-5 py-6 sm:px-6">
               <div className="mb-8 flex items-center justify-between">
                 <div className="flex items-center gap-3.5">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-purple-500 to-violet-600 shadow-[0_0_28px_rgba(168,85,247,0.4)]">
-                    <Sparkles className="h-6 w-6 text-white" />
-                  </div>
+                  <NeurixLogo size="lg" glow />
                   <span className="text-xl font-bold tracking-tight text-white">
-                    Neurix
+                    Neurix Solution
                   </span>
                 </div>
                 <button
@@ -141,66 +233,138 @@ export function Sidebar({
               <button
                 type="button"
                 onClick={() => {
+                  onOpenChat();
+                  onClose();
+                }}
+                className={`sidebar-nav-btn mb-2 flex w-full items-center gap-3 rounded-xl px-4 py-3.5 text-base font-medium transition-all ${
+                  view === "chat"
+                    ? "bg-purple-500/20 text-white ring-1 ring-purple-400/35"
+                    : "text-zinc-300 hover:bg-purple-500/12 hover:text-white"
+                }`}
+              >
+                <MessageSquare className="h-5 w-5 text-purple-400" />
+                Chat
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
                   onOpenDashboard();
                   onClose();
                 }}
-                className="sidebar-nav-btn mb-2 flex w-full items-center gap-3 rounded-xl px-4 py-3.5 text-base font-medium text-zinc-300 transition-all hover:bg-purple-500/12 hover:text-white"
+                className={`sidebar-nav-btn mb-4 flex w-full items-center gap-3 rounded-xl px-4 py-3.5 text-base font-medium transition-all ${
+                  view === "dashboard"
+                    ? "bg-purple-500/20 text-white ring-1 ring-purple-400/35"
+                    : "text-zinc-300 hover:bg-purple-500/12 hover:text-white"
+                }`}
               >
                 <LayoutDashboard className="h-5 w-5 text-purple-400" />
                 Dashboard
               </button>
 
-              {onBookConsultation && (
-                <motion.button
-                  type="button"
-                  onClick={() => {
-                    onBookConsultation();
-                    onClose();
-                  }}
-                  whileHover={{ scale: 1.01 }}
-                  className="mb-6 flex w-full items-center gap-3 rounded-xl border border-purple-500/25 bg-purple-500/10 px-4 py-3.5 text-base font-semibold text-purple-100 transition-all hover:border-purple-400/40 hover:bg-purple-500/18"
-                >
-                  <Calendar className="h-5 w-5 text-purple-300" />
-                  Schedule consultation
-                </motion.button>
-              )}
+              <section className="mb-6 rounded-2xl border border-purple-500/20 bg-purple-950/20 p-3">
+                <p className="sidebar-section-heading mb-2 px-1 text-xs font-bold uppercase tracking-widest text-purple-300/80">
+                  Quick actions
+                </p>
+                <div className="space-y-1">
+                  {onBookCall && (
+                    <SidebarAction
+                      icon={CalendarClock}
+                      label="Book a call"
+                      onClick={() => {
+                        onBookCall();
+                        onClose();
+                      }}
+                    />
+                  )}
+                  {onOpenPricing && (
+                    <SidebarAction
+                      icon={Tag}
+                      label="Pricing"
+                      onClick={() => {
+                        onOpenPricing();
+                        onClose();
+                      }}
+                    />
+                  )}
+                  {onExportChat && view === "chat" && (
+                    <SidebarAction
+                      icon={exportPdfMode ? FileDown : Download}
+                      label={exportPdfMode ? "Export PDF report" : "Export chat"}
+                      onClick={() => {
+                        onExportChat();
+                        onClose();
+                      }}
+                      loading={exportLoading}
+                    />
+                  )}
+                  {onToggleVoiceMuted && view === "chat" && (
+                    <button
+                      type="button"
+                      onClick={onToggleVoiceMuted}
+                      className="sidebar-nav-btn flex w-full items-center gap-3 rounded-xl px-4 py-3.5 text-base font-medium text-zinc-300 transition-all hover:bg-purple-500/12 hover:text-white"
+                    >
+                      {voiceMuted ? (
+                        <VolumeX className="h-5 w-5 shrink-0 text-purple-400" />
+                      ) : (
+                        <Volume2 className="h-5 w-5 shrink-0 text-purple-400" />
+                      )}
+                      {voiceMuted ? "Unmute AI voice" : "Mute AI voice"}
+                    </button>
+                  )}
+                </div>
+              </section>
+
+              <SidebarExpandSection icon={MessageSquare} label="Chats">
+                {conversations.map((c) => {
+                  const isActive = c.id === activeId;
+                  return (
+                    <div
+                      key={c.id}
+                      className="group flex items-center gap-1"
+                    >
+                      <motion.button
+                        type="button"
+                        onClick={() => handleSelect(c.id)}
+                        whileHover={{ x: 2 }}
+                        className={`sidebar-chat-item min-w-0 flex-1 truncate rounded-xl px-4 py-3 text-left text-base font-medium transition-all ${
+                          isActive
+                            ? "sidebar-item-active bg-purple-500/30 text-white ring-1 ring-purple-400/45 shadow-[0_0_20px_rgba(168,85,247,0.25)]"
+                            : "text-zinc-300 hover:bg-purple-500/12 hover:text-white"
+                        }`}
+                      >
+                        {c.title}
+                      </motion.button>
+                      {conversations.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => onDeleteChat(c.id)}
+                          className="rounded-lg p-2 text-zinc-500 opacity-0 transition-all hover:bg-red-500/15 hover:text-red-400 group-hover:opacity-100"
+                          aria-label="Delete chat"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </SidebarExpandSection>
+
+              <SidebarExpandSection icon={LayoutTemplate} label="Templates">
+                {INDUSTRY_TEMPLATES.slice(0, 6).map((t) => {
+                  const TemplateIcon = t.icon;
+                  return (
+                    <SidebarAction
+                      key={t.id}
+                      icon={TemplateIcon}
+                      label={t.title}
+                      onClick={() => handleTemplate(t.prompt)}
+                    />
+                  );
+                })}
+              </SidebarExpandSection>
 
               <nav className="sidebar-scroll flex flex-1 flex-col gap-7 overflow-y-auto pr-1">
-                <section>
-                  <SectionHeading icon={MessageSquare}>Chats</SectionHeading>
-                  <ul className="space-y-1.5">
-                    {conversations.map((c) => {
-                      const isActive = c.id === activeId;
-                      return (
-                        <li key={c.id} className="group flex items-center gap-1">
-                          <motion.button
-                            type="button"
-                            onClick={() => handleSelect(c.id)}
-                            whileHover={{ x: 2 }}
-                            className={`sidebar-chat-item min-w-0 flex-1 truncate rounded-xl px-4 py-3 text-left text-base font-medium transition-all ${
-                              isActive
-                                ? "sidebar-item-active bg-purple-500/30 text-white ring-1 ring-purple-400/45 shadow-[0_0_20px_rgba(168,85,247,0.25)]"
-                                : "text-zinc-300 hover:bg-purple-500/12 hover:text-white"
-                            }`}
-                          >
-                            {c.title}
-                          </motion.button>
-                          {conversations.length > 1 && (
-                            <button
-                              type="button"
-                              onClick={() => onDeleteChat(c.id)}
-                              className="rounded-lg p-2 text-zinc-500 opacity-0 transition-all hover:bg-red-500/15 hover:text-red-400 group-hover:opacity-100"
-                              aria-label="Delete chat"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
-                          )}
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </section>
-
                 <section>
                   <SectionHeading icon={FileText}>Files</SectionHeading>
                   <p className="px-1 text-base leading-relaxed text-zinc-400">
@@ -209,25 +373,6 @@ export function Sidebar({
                     </span>{" "}
                     uploaded across sessions
                   </p>
-                </section>
-
-                <section>
-                  <SectionHeading icon={LayoutTemplate}>
-                    Templates
-                  </SectionHeading>
-                  <ul className="max-h-48 space-y-1 overflow-y-auto">
-                    {INDUSTRY_TEMPLATES.slice(0, 6).map((t) => (
-                      <li key={t.id}>
-                        <button
-                          type="button"
-                          onClick={() => handleTemplate(t.prompt)}
-                          className="sidebar-template-btn w-full rounded-xl px-4 py-3 text-left text-sm font-medium leading-snug text-zinc-300 transition-all hover:bg-purple-500/12 hover:text-purple-50"
-                        >
-                          {t.title}
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
                 </section>
 
                 <section>

@@ -6,6 +6,7 @@ import {
   Rocket,
   MessageCircle,
   Headphones,
+  Coffee,
   type LucideIcon,
 } from "lucide-react";
 
@@ -36,6 +37,15 @@ export const INDUSTRY_TEMPLATES: IndustryTemplate[] = [
       "We run a hotel and need AI for guest FAQ, booking assistance, and WhatsApp concierge. Recommend a phased plan.",
     icon: Hotel,
     gradient: "from-fuchsia-600/30 to-purple-900/20",
+  },
+  {
+    id: "cafe",
+    title: "Café & Coffee Shop AI",
+    description: "Orders, bookings & menu bot",
+    prompt:
+      "I run a café and need AI for WhatsApp orders, table reservations, menu FAQ in Hindi and English, and peak-hour customer support. What should we build first and what's the budget?",
+    icon: Coffee,
+    gradient: "from-amber-600/25 to-purple-900/20",
   },
   {
     id: "realestate",

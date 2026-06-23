@@ -6,42 +6,53 @@ import { X, Check, Sparkles } from "lucide-react";
 const PLANS = [
   {
     name: "Starter",
-    price: "$299",
-    period: "/mo",
-    desc: "For founders testing AI automation",
-    features: ["AI chatbot", "1 workflow", "Email support", "5k messages/mo"],
-    cta: "Start Starter",
+    price: "$300",
+    period: "– $1K",
+    desc: "Launch your first AI — chatbot + one workflow",
+    features: [
+      "AI website chatbot",
+      "1 automation workflow",
+      "Setup & email support",
+      "Ideal for founders testing AI",
+    ],
+    cta: "Get Starter quote",
     highlight: false,
   },
   {
     name: "Growth",
-    price: "$999",
-    period: "/mo",
-    desc: "For scaling SMBs & agencies",
+    price: "$1K",
+    period: "– $8K",
+    desc: "Scale with voice, OCR, WhatsApp & CRM flows",
     features: [
-      "Voice + chat agents",
-      "5 automations",
-      "WhatsApp integration",
-      "Priority support",
-      "Unlimited messages",
+      "Voice AI or OCR pipeline",
+      "WhatsApp + CRM integration",
+      "3–5 automations",
+      "Priority support & handoff",
     ],
-    cta: "Go Growth",
+    cta: "Get Growth quote",
     highlight: true,
   },
   {
     name: "Enterprise",
-    price: "Custom",
-    period: "",
-    desc: "For large teams & custom AI systems",
+    price: "$15K",
+    period: "+",
+    desc: "Custom SaaS, platforms & enterprise AI systems",
     features: [
-      "Dedicated architect",
-      "Custom integrations",
-      "SLA & security review",
-      "On-prem options",
+      "SaaS MVP or full product build",
+      "Dedicated AI architect",
+      "Custom integrations + SLA",
+      "Security review & on-prem options",
     ],
     cta: "Contact sales",
     highlight: false,
   },
+] as const;
+
+const A_LA_CARTE = [
+  "Voice AI agent — from $2K",
+  "OCR / document pipeline — from $1K",
+  "SaaS MVP — from $3K",
+  "Automation workflow — from $1K",
 ] as const;
 
 type PricingModalProps = {
@@ -68,7 +79,7 @@ export function PricingModal({ open, onClose, onBook }: PricingModalProps) {
             exit={{ opacity: 0, y: 24, scale: 0.96 }}
             className="glass-premium fixed left-1/2 top-1/2 z-[101] max-h-[90vh] w-[calc(100%-1.5rem)] max-w-5xl -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-3xl p-6 sm:p-8"
           >
-            <div className="mb-8 flex items-start justify-between">
+            <div className="mb-6 flex items-start justify-between sm:mb-8">
               <div>
                 <p className="flex items-center gap-2 text-sm text-purple-300">
                   <Sparkles className="h-4 w-4" /> Neurix Pricing
@@ -76,6 +87,9 @@ export function PricingModal({ open, onClose, onBook }: PricingModalProps) {
                 <h2 className="mt-1 text-2xl font-bold text-white sm:text-3xl">
                   Invest in AI that ships
                 </h2>
+                <p className="mt-2 max-w-xl text-sm text-zinc-500">
+                  Project-based pricing — final quote after your free consultation.
+                </p>
               </div>
               <button
                 type="button"
@@ -139,6 +153,16 @@ export function PricingModal({ open, onClose, onBook }: PricingModalProps) {
                   </motion.button>
                 </motion.div>
               ))}
+            </div>
+            <div className="mt-6 rounded-2xl border border-purple-500/20 bg-black/25 px-5 py-4 sm:mt-8">
+              <p className="text-xs font-semibold uppercase tracking-wide text-purple-300">
+                À la carte services
+              </p>
+              <ul className="mt-3 flex flex-wrap gap-x-6 gap-y-2 text-sm text-zinc-400">
+                {A_LA_CARTE.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
             </div>
           </motion.div>
         </>

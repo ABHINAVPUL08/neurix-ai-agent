@@ -273,7 +273,7 @@ export function DocumentAnalysisReport({
           <span>AI Business Audit</span>
         </div>
         <p className="consultant-report__subtitle">
-          Strategic analysis prepared by your Neurix AI consultant
+          Strategic analysis prepared by your Neurix Solution consultant
         </p>
         {truncatedNote && (
           <p className="consultant-report__notice">

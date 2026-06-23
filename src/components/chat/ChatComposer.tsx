@@ -1,6 +1,8 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { memo, useState, useRef, type DragEvent, type RefObject } from "react";
+import type { VoiceUiStatus } from "@/components/voice/VoiceStatusLabel";
 import { motion, AnimatePresence } from "framer-motion";
 import { Link2, UploadCloud } from "lucide-react";
 import { ChatInput } from "@/components/ChatInput";
@@ -25,7 +27,20 @@ type ChatComposerProps = {
   showQuickActions?: boolean;
   suggestionLabels?: string[];
   inputRef?: RefObject<HTMLTextAreaElement | null>;
+  voiceStatus?: VoiceUiStatus;
+  isListening?: boolean;
+  isSpeaking?: boolean;
+  voiceSupported?: boolean;
+  onVoiceToggle?: () => void;
 };
+
+const VoiceStatusLabel = dynamic(
+  () =>
+    import("@/components/voice/VoiceStatusLabel").then(
+      (m) => m.VoiceStatusLabel,
+    ),
+  { ssr: false },
+);
 
 function ChatComposerInner({
   input,
@@ -44,6 +59,11 @@ function ChatComposerInner({
   showQuickActions = true,
   suggestionLabels,
   inputRef,
+  voiceStatus = null,
+  isListening = false,
+  isSpeaking = false,
+  voiceSupported = false,
+  onVoiceToggle,
 }: ChatComposerProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -164,6 +184,8 @@ function ChatComposerInner({
           </motion.button>
         </div>
 
+        <VoiceStatusLabel status={voiceStatus} />
+
         <ChatInput
           ref={inputRef}
           value={input}
@@ -174,6 +196,10 @@ function ChatComposerInner({
           disabled={disabled}
           isGenerating={isGenerating}
           canSubmit={canSubmit}
+          isListening={isListening}
+          isSpeaking={isSpeaking}
+          voiceSupported={voiceSupported}
+          onVoiceToggle={onVoiceToggle}
         />
       </div>
     </div>

@@ -1,6 +1,6 @@
 export const CONSULTATION_EMAIL = "neurix26@gmail.com";
 
-export const CONSULTATION_SUBJECT = "New Consultation Request - Neurix AI";
+export const CONSULTATION_SUBJECT = "New Consultation Request - Neurix Solution";
 
 export type ConsultationFormData = {
   name: string;
@@ -32,7 +32,7 @@ export const BUDGET_RANGES = [
 
 export function formatConsultationEmailBody(data: ConsultationFormData): string {
   return [
-    "New consultation request from Neurix AI Agent",
+    "New consultation request from Neurix Solution",
     "",
     `Name: ${data.name}`,
     `Email: ${data.email}`,

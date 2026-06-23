@@ -25,7 +25,7 @@ function parseBody(body: unknown): ConsultationFormData | null {
 
 async function sendViaResend(data: ConsultationFormData): Promise<boolean> {
   const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.RESEND_FROM_EMAIL ?? "Neurix AI <onboarding@resend.dev>";
+  const from = process.env.RESEND_FROM_EMAIL ?? "Neurix Solution <onboarding@resend.dev>";
   if (!apiKey) return false;
 
   const controller = new AbortController();

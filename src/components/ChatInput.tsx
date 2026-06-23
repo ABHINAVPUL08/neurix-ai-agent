@@ -1,7 +1,7 @@
 "use client";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowUp, Square, Paperclip } from "lucide-react";
+import { ArrowUp, Square, Paperclip, Mic } from "lucide-react";
 import { FormEvent, KeyboardEvent, forwardRef, memo, useRef } from "react";
 import { useAutoResizeTextarea } from "@/hooks/useAutoResizeTextarea";
 
@@ -14,6 +14,10 @@ type ChatInputProps = {
   disabled: boolean;
   isGenerating: boolean;
   canSubmit: boolean;
+  isListening?: boolean;
+  voiceSupported?: boolean;
+  onVoiceToggle?: () => void;
+  isSpeaking?: boolean;
 };
 
 const ChatInputInner = forwardRef<HTMLTextAreaElement, ChatInputProps>(
@@ -27,6 +31,10 @@ const ChatInputInner = forwardRef<HTMLTextAreaElement, ChatInputProps>(
       disabled,
       isGenerating,
       canSubmit,
+      isListening = false,
+      voiceSupported = false,
+      onVoiceToggle,
+      isSpeaking = false,
     },
     forwardedRef,
   ) {
@@ -64,7 +72,9 @@ const ChatInputInner = forwardRef<HTMLTextAreaElement, ChatInputProps>(
   return (
     <form
       onSubmit={handleSubmit}
-      className="chat-input-float rounded-xl px-3 py-2.5 transition-all duration-200 sm:rounded-2xl sm:px-5 sm:py-4"
+      className={`chat-input-float rounded-xl px-3 py-2.5 transition-all duration-300 sm:rounded-2xl sm:px-5 sm:py-4 ${
+        isSpeaking ? "voice-speaking-glow" : ""
+      }`}
     >
       <div className="flex items-end gap-2 sm:gap-3">
         <motion.button
@@ -79,15 +89,42 @@ const ChatInputInner = forwardRef<HTMLTextAreaElement, ChatInputProps>(
           <Paperclip className="h-5 w-5" />
         </motion.button>
 
+        {voiceSupported && onVoiceToggle ? (
+          <motion.button
+            type="button"
+            onClick={onVoiceToggle}
+            disabled={disabled}
+            whileHover={{ scale: 1.05, y: -1 }}
+            whileTap={{ scale: 0.95 }}
+            aria-pressed={isListening}
+            aria-label={isListening ? "Stop listening" : "Start voice input"}
+            className={`relative flex h-10 w-10 shrink-0 items-center justify-center rounded-lg transition-all duration-200 disabled:opacity-40 sm:h-12 sm:w-12 sm:rounded-xl ${
+              isListening
+                ? "voice-mic-btn--listening"
+                : "text-zinc-400 hover:bg-purple-500/15 hover:text-purple-300 hover:shadow-[0_0_24px_rgba(168,85,247,0.28)]"
+            }`}
+          >
+            {isListening ? (
+              <>
+                <span className="voice-mic-ripple" aria-hidden />
+                <span className="voice-mic-ripple voice-mic-ripple--delay" aria-hidden />
+              </>
+            ) : null}
+            <Mic className="relative z-10 h-5 w-5" />
+          </motion.button>
+        ) : null}
+
         <textarea
           ref={setTextareaRef}
           value={value}
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={
-            isGenerating
-              ? "Neurix is responding…"
-              : "Ask Neurix anything…"
+            isListening
+              ? "Listening… speak naturally"
+              : isGenerating
+                ? "Neurix is responding…"
+                : "Ask Neurix anything…"
           }
           rows={1}
           disabled={disabled}

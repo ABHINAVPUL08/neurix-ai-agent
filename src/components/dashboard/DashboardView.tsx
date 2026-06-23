@@ -1,20 +1,42 @@
 "use client";
 
+import { useMemo } from "react";
 import { motion } from "framer-motion";
 import {
   Bot,
   FileText,
-  Workflow,
+  Layers,
   BarChart3,
   Zap,
   Clock,
 } from "lucide-react";
+import { getAiMode, resolveAiMode } from "@/lib/ai-modes";
+import { FEATURE_TILES } from "@/lib/feature-tiles";
 import type { Conversation } from "@/types/chat";
 
 type DashboardViewProps = {
   conversations: Conversation[];
   onOpenChat: () => void;
 };
+
+function getTopModeLabel(conversations: Conversation[]): string {
+  const counts = new Map<string, number>();
+  for (const conversation of conversations) {
+    const mode = conversation.aiMode;
+    counts.set(mode, (counts.get(mode) ?? 0) + 1);
+  }
+
+  let topMode = "consultant";
+  let topCount = 0;
+  for (const [mode, count] of counts) {
+    if (count > topCount) {
+      topMode = mode;
+      topCount = count;
+    }
+  }
+
+  return getAiMode(resolveAiMode(topMode)).label;
+}
 
 export function DashboardView({
   conversations,
@@ -32,11 +54,28 @@ export function DashboardView({
     .sort((a, b) => b.updatedAt - a.updatedAt)
     .slice(0, 5);
 
+  const topModeLabel = useMemo(
+    () => getTopModeLabel(conversations),
+    [conversations],
+  );
+
+  const lastActiveLabel = useMemo(() => {
+    if (recent.length === 0) return "No activity yet";
+    return new Date(recent[0].updatedAt).toLocaleString();
+  }, [recent]);
+
   const stats = [
     { label: "Conversations", value: conversations.length, icon: Bot },
     { label: "Messages", value: totalMessages, icon: Zap },
     { label: "Documents", value: totalDocs, icon: FileText },
-    { label: "Automations", value: "12+", icon: Workflow },
+    { label: "Service areas", value: FEATURE_TILES.length, icon: Layers },
+  ];
+
+  const insights = [
+    `Most used mode: ${topModeLabel}`,
+    `Documents analyzed: ${totalDocs}`,
+    `Total messages: ${totalMessages}`,
+    `Last active: ${lastActiveLabel}`,
   ];
 
   return (
@@ -47,7 +86,7 @@ export function DashboardView({
             Neurix Command Center
           </h2>
           <p className="mt-1 text-sm text-zinc-500">
-            Your AI operating system — automations, projects & insights
+            Your AI operating system — sessions, audits & activity
           </p>
         </div>
         <motion.button
@@ -84,13 +123,12 @@ export function DashboardView({
           className="glass-panel rounded-2xl p-5"
         >
           <h3 className="mb-4 flex items-center gap-2 font-semibold text-white">
-            <BarChart3 className="h-5 w-5 text-purple-400" /> AI usage insights
+            <BarChart3 className="h-5 w-5 text-purple-400" /> Session insights
           </h3>
           <ul className="space-y-3 text-sm text-zinc-400">
-            <li>Peak activity: Business hours (9am–6pm)</li>
-            <li>Top mode: Business Consultant</li>
-            <li>Avg. response: &lt; 2s (Groq)</li>
-            <li>Recommended: Deploy voice agent next</li>
+            {insights.map((line) => (
+              <li key={line}>{line}</li>
+            ))}
           </ul>
         </motion.div>
 

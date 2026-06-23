@@ -12,6 +12,7 @@ import {
   Sparkles,
   LayoutDashboard,
   GitBranch,
+  Calendar,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { DEFAULT_SUGGESTION_LABELS } from "@/lib/feature-tiles";
@@ -21,6 +22,7 @@ const ICON_BY_LABEL: Record<string, LucideIcon> = {
   "Create SaaS MVP": LayoutTemplate,
   "Analyze My Workflow": Workflow,
   "Upload Project PDF": FileUp,
+  "Book a free consultation →": Calendar,
   "Automate My Business": Zap,
   "Design a multi-step AI agent for my team": GitBranch,
   "Map triggers and handoffs for my assistant": Workflow,

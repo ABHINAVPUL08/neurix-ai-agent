@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 import { buildModeSystemAddon, resolveAiMode } from "@/lib/ai-modes";
+import {
+  buildLanguageMirroringAddon,
+  detectConversationLanguage,
+} from "@/lib/conversation-language";
 import { resolveChatError } from "@/lib/chat-errors";
 import {
   OPENAI_MAX_TOKENS,
@@ -101,7 +105,7 @@ async function buildWebsiteContext(url: string): Promise<string | null> {
     const res = await fetch(url, {
       signal: controller.signal,
       headers: {
-        "User-Agent": "NeurixAI/1.0 website analysis bot",
+        "User-Agent": "NeurixSolution/1.0 website analysis bot",
         Accept: "text/html,application/xhtml+xml",
       },
     });
@@ -193,7 +197,11 @@ export async function POST(request: NextRequest) {
     }
 
     const openai = createChatOpenAiClient();
-    const systemPrompt = NEURIX_SYSTEM_PROMPT + buildModeSystemAddon(mode);
+    const replyLanguage = detectConversationLanguage(messages);
+    const systemPrompt =
+      NEURIX_SYSTEM_PROMPT +
+      buildModeSystemAddon(mode) +
+      buildLanguageMirroringAddon(replyLanguage);
 
     const lastUserIndex = messages.findLastIndex((m) => m.role === "user");
     const chatMessages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [

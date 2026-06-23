@@ -23,6 +23,7 @@ export const NEURIX_INDUSTRIES = [
   "real estate",
   "e-commerce",
   "restaurants",
+  "cafés & coffee shops",
   "marketing agencies",
   "education & training",
   "SaaS companies",
@@ -65,6 +66,12 @@ export const INDUSTRY_PLAYBOOK: Record<string, string[]> = {
     "Reservation & menu WhatsApp bot",
     "Peak-hour order/support automation",
     "Review & feedback routing",
+  ],
+  cafes: [
+    "WhatsApp ordering & pickup notifications",
+    "Table booking & waitlist automation",
+    "Hindi + English menu FAQ voice/chat bot",
+    "Loyalty offers & repeat-customer follow-ups",
   ],
   agencies: [
     "Client reporting dashboards",
