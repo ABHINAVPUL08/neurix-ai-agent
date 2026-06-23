@@ -29,6 +29,7 @@ import {
 import { fileToDataUrl, isImageFile } from "@/lib/file-to-data-url";
 import { revealTextSmoothly } from "@/lib/reveal-text";
 import {
+  BOOK_CONSULTATION_CHIP,
   getFeatureTile,
   type FeatureTileId,
 } from "@/lib/feature-tiles";
@@ -38,7 +39,12 @@ import {
   exportConversationMarkdown,
 } from "@/lib/storage/conversations";
 import { speechController } from "@/lib/speech-controller";
+import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
+import { useVoiceOutput } from "@/hooks/useVoiceOutput";
+import { useVoiceSettings } from "@/hooks/useVoiceSettings";
+import type { VoiceUiStatus } from "@/components/voice/VoiceStatusLabel";
 import type { AppView, ChatMessageItem } from "@/types/chat";
+import type { HeroTab } from "@/components/hero/ChatHero";
 
 const DashboardView = dynamic(
   () =>
@@ -70,6 +76,12 @@ const ConsultationModal = dynamic(
 const PricingModal = dynamic(
   () =>
     import("@/components/pricing/PricingModal").then((m) => m.PricingModal),
+  { ssr: false },
+);
+
+const CalendlyModal = dynamic(
+  () =>
+    import("@/components/modals/CalendlyModal").then((m) => m.CalendlyModal),
   { ssr: false },
 );
 
@@ -124,11 +136,13 @@ function NeurixPlatformInner({
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [consultationOpen, setConsultationOpen] = useState(false);
   const [pricingOpen, setPricingOpen] = useState(false);
+  const [calendlyOpen, setCalendlyOpen] = useState(false);
   const [pendingAttachment, setPendingAttachment] = useState<File | null>(null);
   const [attachmentJustAdded, setAttachmentJustAdded] = useState(false);
   const [docTruncated, setDocTruncated] = useState(false);
   const [lastAuditFilename, setLastAuditFilename] = useState<string | undefined>();
   const [showTemplates, setShowTemplates] = useState(false);
+  const [heroTab, setHeroTab] = useState<HeroTab>("services");
   const [activeSuggestionLabels, setActiveSuggestionLabels] = useState<
     string[] | undefined
   >(undefined);
@@ -138,6 +152,32 @@ function NeurixPlatformInner({
   const scrollThrottleRef = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
   const sendInFlightRef = useRef(false);
+  const { voiceMuted, toggleVoiceMuted, voiceOutputEnabled } =
+    useVoiceSettings();
+  const { isSpeaking, stop: stopVoiceOutput, prepare: prepareVoice } =
+    useVoiceOutput();
+
+  const {
+    isSupported: voiceSupported,
+    isListening,
+    stop: stopVoiceInput,
+    toggle: toggleVoiceInput,
+  } = useSpeechRecognition({
+    lang: "en-IN",
+    silenceMs: 1500,
+    onSpeechDetected: () => {
+      speechController.stop();
+    },
+    onInterim: (text) => {
+      speechController.stop();
+      setInput(text);
+    },
+    onTranscriptCommit: (text) => {
+      setInput(text);
+    },
+    onError: (message) => setError(message),
+  });
+
   const {
     progress: uploadProgress,
     start: startUploadProgress,
@@ -158,6 +198,27 @@ function NeurixPlatformInner({
     () => messages.findLastIndex((m) => m.role === "assistant"),
     [messages],
   );
+
+  const assistantReplyCount = useMemo(
+    () =>
+      messages.filter(
+        (m) => m.role === "assistant" && m.id !== WELCOME_ID,
+      ).length,
+    [messages],
+  );
+
+  const composerSuggestionLabels = useMemo(() => {
+    if (showHero || assistantReplyCount < 2) {
+      return activeSuggestionLabels;
+    }
+    const labels = activeSuggestionLabels
+      ? [...activeSuggestionLabels]
+      : [];
+    if (!labels.includes(BOOK_CONSULTATION_CHIP)) {
+      return [BOOK_CONSULTATION_CHIP, ...labels];
+    }
+    return labels;
+  }, [activeSuggestionLabels, assistantReplyCount, showHero]);
 
   const scrollContentKey = useMemo(() => {
     const last = messages[messages.length - 1];
@@ -214,6 +275,8 @@ function NeurixPlatformInner({
   const stopGeneration = useCallback(() => {
     abortRef.current?.abort();
     abortRef.current = null;
+    stopVoiceInput();
+    speechController.stop();
     setStreamingId(null);
     setIsLoading(false);
     setIsAnalyzingDoc(false);
@@ -226,13 +289,13 @@ function NeurixPlatformInner({
       }
       return prev;
     });
-  }, [resetUploadProgress, setMessages]);
+  }, [resetUploadProgress, setMessages, stopVoiceInput]);
 
   const streamAssistantReply = useCallback(
     async (
       history: ChatMessageItem[],
       attachment?: ChatAttachmentPayload,
-    ) => {
+    ): Promise<{ assistantId: string; content: string } | null> => {
       abortRef.current?.abort();
       const controller = new AbortController();
       abortRef.current = controller;
@@ -287,10 +350,16 @@ function NeurixPlatformInner({
           attachment,
         );
         applyAssistantContent(reply);
+        streamedContent = reply;
       }
 
       setStreamingId(null);
       abortRef.current = null;
+
+      if (controller.signal.aborted || !streamedContent.trim()) {
+        return null;
+      }
+      return { assistantId, content: streamedContent };
     },
     [aiMode, createMessage, setMessages, WELCOME_ID],
   );
@@ -300,7 +369,7 @@ function NeurixPlatformInner({
       analysis: string,
       meta: AnalysisMeta,
       signal?: AbortSignal,
-    ) => {
+    ): Promise<{ assistantId: string; content: string } | null> => {
       setLastAuditFilename(meta.filename);
       setUploadedFiles((prev) => [
         {
@@ -332,7 +401,11 @@ function NeurixPlatformInner({
         { signal, chunkSize: 8, delayMs: 8 },
       );
 
-      if (!signal?.aborted) setStreamingId(null);
+      if (!signal?.aborted) {
+        setStreamingId(null);
+        return { assistantId: assistantMsg.id, content: analysis };
+      }
+      return null;
     },
     [createMessage, setMessages, setUploadedFiles],
   );
@@ -392,12 +465,59 @@ function NeurixPlatformInner({
     [chatDisabled, setAiMode, focusComposerInput, handleFileSelected],
   );
 
+  const speakAssistantReply = useCallback(
+    (assistantId: string, content: string) => {
+      if (!voiceOutputEnabled || !content.trim()) return;
+      void prepareVoice();
+      speechController.speak(assistantId, content);
+    },
+    [voiceOutputEnabled, prepareVoice],
+  );
+
+  const handleToggleVoiceMuted = useCallback(() => {
+    const muted = toggleVoiceMuted();
+    if (muted) {
+      speechController.stop();
+      stopVoiceOutput();
+    }
+  }, [toggleVoiceMuted, stopVoiceOutput]);
+
+  const handleVoiceToggle = useCallback(() => {
+    void prepareVoice();
+    speechController.stop();
+    if (isListening) {
+      stopVoiceInput();
+      return;
+    }
+    if (chatDisabled) return;
+    toggleVoiceInput(input);
+  }, [
+    input,
+    isListening,
+    stopVoiceInput,
+    toggleVoiceInput,
+    chatDisabled,
+    prepareVoice,
+  ]);
+
+  const handleComposerInputChange = useCallback(
+    (value: string) => {
+      if (value !== input) {
+        speechController.stop();
+      }
+      setInput(value);
+    },
+    [input],
+  );
+
   const sendMessage = useCallback(
     async (text?: string) => {
       const trimmed = (text ?? input).trim();
       const file = pendingAttachment;
       if ((!trimmed && !file) || chatDisabled || sendInFlightRef.current) return;
 
+      stopVoiceInput();
+      speechController.stop();
       sendInFlightRef.current = true;
 
       try {
@@ -423,12 +543,13 @@ function NeurixPlatformInner({
 
             try {
               const dataUrl = await fileToDataUrl(fileToSend);
-              await streamAssistantReply(nextMessages, {
+              const spoken = await streamAssistantReply(nextMessages, {
                 kind: "image",
                 name: fileToSend.name,
                 mimeType: fileToSend.type || "image/png",
                 dataUrl,
               });
+              if (spoken) speakAssistantReply(spoken.assistantId, spoken.content);
             } catch (err) {
               if (err instanceof Error && err.name === "AbortError") return;
               setStreamingId(null);
@@ -464,7 +585,12 @@ function NeurixPlatformInner({
             completeUploadProgress();
             setIsAnalyzingDoc(false);
             setDocTruncated(meta.truncated);
-            await revealDocumentAnalysis(analysis, meta, controller.signal);
+            const spoken = await revealDocumentAnalysis(
+              analysis,
+              meta,
+              controller.signal,
+            );
+            if (spoken) speakAssistantReply(spoken.assistantId, spoken.content);
           } catch (err) {
             if (err instanceof Error && err.name === "AbortError") return;
             setError(
@@ -490,7 +616,8 @@ function NeurixPlatformInner({
         setIsLoading(true);
 
         try {
-          await streamAssistantReply(nextMessages);
+          const spoken = await streamAssistantReply(nextMessages);
+          if (spoken) speakAssistantReply(spoken.assistantId, spoken.content);
         } catch (err) {
           if (err instanceof Error && err.name === "AbortError") return;
           setStreamingId(null);
@@ -504,6 +631,7 @@ function NeurixPlatformInner({
             if (!reply?.trim()) {
               throw new Error("Empty response from AI");
             }
+            const fallbackAssistant = createMessage("assistant", reply);
             setMessages((prev) => {
               const last = prev[prev.length - 1];
               if (last?.role === "assistant") {
@@ -511,8 +639,9 @@ function NeurixPlatformInner({
                   i === prev.length - 1 ? { ...m, content: reply } : m,
                 );
               }
-              return [...prev, createMessage("assistant", reply)];
+              return [...prev, fallbackAssistant];
             });
+            speakAssistantReply(fallbackAssistant.id, reply);
           } catch {
             setError(
               err instanceof Error
@@ -541,6 +670,8 @@ function NeurixPlatformInner({
       startUploadProgress,
       completeUploadProgress,
       resetUploadProgress,
+      stopVoiceInput,
+      speakAssistantReply,
     ],
   );
 
@@ -553,8 +684,11 @@ function NeurixPlatformInner({
     setMessages(withoutLast);
     setError(null);
     setIsLoading(true);
+    stopVoiceInput();
+    speechController.stop();
     try {
-      await streamAssistantReply(withoutLast);
+      const spoken = await streamAssistantReply(withoutLast);
+      if (spoken) speakAssistantReply(spoken.assistantId, spoken.content);
     } catch (err) {
       if (err instanceof Error && err.name === "AbortError") return;
       setStreamingId(null);
@@ -577,6 +711,8 @@ function NeurixPlatformInner({
     messages,
     streamAssistantReply,
     setMessages,
+    stopVoiceInput,
+    speakAssistantReply,
   ]);
 
   const handleEditUserMessage = useCallback(
@@ -600,8 +736,11 @@ function NeurixPlatformInner({
       setError(null);
       setIsLoading(true);
 
+      stopVoiceInput();
+      speechController.stop();
       try {
-        await streamAssistantReply(editedHistory);
+        const spoken = await streamAssistantReply(editedHistory);
+        if (spoken) speakAssistantReply(spoken.assistantId, spoken.content);
       } catch (err) {
         if (err instanceof Error && err.name === "AbortError") return;
         setStreamingId(null);
@@ -613,7 +752,14 @@ function NeurixPlatformInner({
         sendInFlightRef.current = false;
       }
     },
-    [chatDisabled, messages, setMessages, streamAssistantReply],
+    [
+      chatDisabled,
+      messages,
+      setMessages,
+      streamAssistantReply,
+      stopVoiceInput,
+      speakAssistantReply,
+    ],
   );
 
   const handleMessageFeedback = useCallback(
@@ -638,6 +784,7 @@ function NeurixPlatformInner({
   }, []);
 
   const resetEphemeralState = useCallback(() => {
+    stopVoiceInput();
     setInput("");
     setPendingAttachment(null);
     setAttachmentJustAdded(false);
@@ -650,7 +797,7 @@ function NeurixPlatformInner({
     setIsLoading(false);
     setIsAnalyzingDoc(false);
     resetUploadProgress();
-  }, [resetUploadProgress]);
+  }, [resetUploadProgress, stopVoiceInput]);
 
   const handleSelectChat = useCallback(
     (id: string) => {
@@ -738,6 +885,21 @@ function NeurixPlatformInner({
     openDocumentPicker(handleFileSelected);
   }, [handleFileSelected]);
 
+  const handleChipSelect = useCallback(
+    (text: string) => {
+      if (text === BOOK_CONSULTATION_CHIP) {
+        setConsultationOpen(true);
+        return;
+      }
+      if (text === "Upload Project PDF") {
+        openUploadFlow();
+        return;
+      }
+      void sendMessage(text);
+    },
+    [openUploadFlow, sendMessage],
+  );
+
   const loaderStatus = isAnalyzingDoc
     ? "analyzing"
     : isLoading
@@ -745,6 +907,13 @@ function NeurixPlatformInner({
       : "thinking";
 
   const showLoader = (isLoading || isAnalyzingDoc) && !streamingId;
+
+  const voiceUiStatus = useMemo((): VoiceUiStatus => {
+    if (isListening) return "listening";
+    if (isSpeaking) return "speaking";
+    if (isGenerating) return "thinking";
+    return null;
+  }, [isListening, isSpeaking, isGenerating]);
 
   if (!hydrated) {
     return <ChatShellSkeleton />;
@@ -763,24 +932,27 @@ function NeurixPlatformInner({
         onSelectChat={handleSelectChat}
         onDeleteChat={deleteChat}
         onOpenDashboard={() => setView("dashboard")}
+        onOpenChat={() => setView("chat")}
+        view={view}
+        onBookCall={() => setCalendlyOpen(true)}
+        onOpenPricing={() => setPricingOpen(true)}
+        onExportChat={() => void handleExport()}
+        exportPdfMode={!!auditMessage}
+        exportLoading={isExporting}
+        voiceMuted={voiceMuted}
+        onToggleVoiceMuted={handleToggleVoiceMuted}
         aiMode={aiMode}
         onModeChange={setAiMode}
         onTemplateSelect={(t) => {
           setInput(t);
           setView("chat");
         }}
-        onBookConsultation={() => setConsultationOpen(true)}
       />
 
       <div className="relative z-10 flex min-h-0 flex-1 flex-col">
         <Navbar
-          view={view}
-          onViewChange={setView}
           onBookConsultation={() => setConsultationOpen(true)}
           onSidebarOpen={() => setSidebarOpen(true)}
-          onExportChat={() => void handleExport()}
-          exportPdfMode={!!auditMessage}
-          exportLoading={isExporting}
           aiMode={aiMode}
           onModeChange={setAiMode}
         />
@@ -805,9 +977,15 @@ function NeurixPlatformInner({
                       onTileSelect={handleFeatureTileSelect}
                       onChipSelect={(text) => void sendMessage(text)}
                       onUploadClick={openUploadFlow}
+                      onBookConsultation={() => setConsultationOpen(true)}
+                      onHeroTabChange={(tab) => {
+                        setHeroTab(tab);
+                        if (tab !== "services") setShowTemplates(false);
+                      }}
                       suggestionLabels={activeSuggestionLabels}
                       chipsDisabled={chatDisabled}
                     />
+                    {heroTab === "services" && (
                     <div className="content-shell pb-8">
                       <button
                         type="button"
@@ -824,6 +1002,7 @@ function NeurixPlatformInner({
                         </div>
                       )}
                     </div>
+                    )}
                   </div>
                 ) : (
                   <ChatMessageList
@@ -873,9 +1052,14 @@ function NeurixPlatformInner({
 
               <ChatComposer
                 input={input}
-                onInputChange={setInput}
+                onInputChange={handleComposerInputChange}
                 onSubmit={() => void sendMessage()}
                 onStop={stopGeneration}
+                voiceStatus={voiceUiStatus}
+                isListening={isListening}
+                isSpeaking={isSpeaking}
+                voiceSupported={voiceSupported}
+                onVoiceToggle={handleVoiceToggle}
                 onFileSelected={handleFileSelected}
                 attachedFile={pendingAttachment}
                 attachmentJustAdded={attachmentJustAdded}
@@ -884,12 +1068,12 @@ function NeurixPlatformInner({
                   setAttachmentJustAdded(false);
                 }}
                 onPasteLink={handlePasteLink}
-                onChipSelect={(text) => void sendMessage(text)}
+                onChipSelect={handleChipSelect}
                 disabled={chatDisabled}
                 isGenerating={isGenerating}
                 canSubmit={canSubmit}
                 showQuickActions={!showHero}
-                suggestionLabels={activeSuggestionLabels}
+                suggestionLabels={composerSuggestionLabels}
                 inputRef={composerInputRef}
               />
             </>
@@ -900,6 +1084,11 @@ function NeurixPlatformInner({
       <ConsultationModal
         open={consultationOpen}
         onClose={() => setConsultationOpen(false)}
+        onBookCall={() => setCalendlyOpen(true)}
+      />
+      <CalendlyModal
+        open={calendlyOpen}
+        onClose={() => setCalendlyOpen(false)}
       />
       <PricingModal
         open={pricingOpen}

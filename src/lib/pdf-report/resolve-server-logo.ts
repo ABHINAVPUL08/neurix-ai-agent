@@ -2,8 +2,8 @@ import fs from "fs";
 import path from "path";
 
 const LOGO_CANDIDATES = [
-  "neurix-logo.png",
   "neurix-logo.jpg",
+  "neurix-logo.png",
   "neurix-logo.jpeg",
   "neurix-logo.webp",
 ] as const;

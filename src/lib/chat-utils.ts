@@ -26,7 +26,7 @@ export const WELCOME_MESSAGE: ChatMessageItem = {
   role: "assistant",
   createdAt: Date.now(),
   content:
-    "Welcome to Neurix AI. I help businesses design intelligent automation — AI agents, voice systems, OCR pipelines, and custom SaaS. What would you like to build?",
+    "Welcome to Neurix Solution. I help businesses design intelligent automation — AI agents, voice systems, OCR pipelines, and custom SaaS. What would you like to build?",
 };
 
 export function getChatTitle(messages: ChatMessageItem[]): string {

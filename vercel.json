@@ -13,6 +13,9 @@
     "src/app/api/chat/route.ts": {
       "maxDuration": 60
     },
+    "src/app/api/tts/route.ts": {
+      "maxDuration": 30
+    },
     "src/app/api/consultation/route.ts": {
       "maxDuration": 30
     },

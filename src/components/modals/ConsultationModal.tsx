@@ -20,6 +20,7 @@ import {
 type ConsultationModalProps = {
   open: boolean;
   onClose: () => void;
+  onBookCall?: () => void;
 };
 
 const INITIAL: ConsultationFormData = {
@@ -36,7 +37,11 @@ const inputClass =
 
 const labelClass = "mb-1.5 block text-sm font-semibold text-zinc-300";
 
-export function ConsultationModal({ open, onClose }: ConsultationModalProps) {
+export function ConsultationModal({
+  open,
+  onClose,
+  onBookCall,
+}: ConsultationModalProps) {
   const [form, setForm] = useState<ConsultationFormData>(INITIAL);
   const [status, setStatus] = useState<"form" | "submitting" | "success">("form");
   const [error, setError] = useState<string | null>(null);
@@ -155,6 +160,21 @@ export function ConsultationModal({ open, onClose }: ConsultationModalProps) {
                       Your consultation request has been received. Our team at
                       Neurix will reach out shortly to discuss your project.
                     </p>
+                    {onBookCall && (
+                      <motion.button
+                        type="button"
+                        whileHover={{ scale: 1.03 }}
+                        whileTap={{ scale: 0.97 }}
+                        onClick={() => {
+                          handleClose();
+                          onBookCall();
+                        }}
+                        className="mt-6 flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-purple-600 to-violet-600 px-6 py-3 text-base font-semibold text-white shadow-lg shadow-purple-900/40"
+                      >
+                        <Calendar className="h-5 w-5" />
+                        Pick a time on Calendly
+                      </motion.button>
+                    )}
                     <motion.button
                       type="button"
                       whileHover={{ scale: 1.03 }}

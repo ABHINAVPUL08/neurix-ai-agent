@@ -50,7 +50,7 @@ export const FEATURE_TILES: FeatureTileConfig[] = [
   {
     id: "ocr",
     label: "OCR Pipelines",
-    description: "Document AI",
+    description: "Upload PDF — free AI audit",
     aiModeId: "ocr-engineer",
     starterPrompt:
       "Extract and analyze information from uploaded documents.",
@@ -110,6 +110,8 @@ const TILE_BY_ID = new Map(FEATURE_TILES.map((t) => [t.id, t]));
 export function getFeatureTile(id: FeatureTileId): FeatureTileConfig {
   return TILE_BY_ID.get(id) ?? FEATURE_TILES[0];
 }
+
+export const BOOK_CONSULTATION_CHIP = "Book a free consultation →";
 
 export const DEFAULT_SUGGESTION_LABELS = [
   "Build AI Voice Agent",

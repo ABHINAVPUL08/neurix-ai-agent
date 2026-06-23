@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useSyncExternalStore } from "react";
+import { unlockSpeechAudio } from "@/lib/natural-speech/audio-unlock";
 import { speechController } from "@/lib/speech-controller";
 
 type UseSpeechSynthesisOptions = {
@@ -8,18 +9,28 @@ type UseSpeechSynthesisOptions = {
   text: string;
 };
 
-export function useSpeechSynthesis({ messageId, text }: UseSpeechSynthesisOptions) {
-  const [isSpeaking, setIsSpeaking] = useState(false);
-  const [isSupported, setIsSupported] = useState(false);
+function subscribeMessageSpeaking(onStoreChange: () => void) {
+  return speechController.subscribe(() => onStoreChange());
+}
 
-  useEffect(() => {
-    setIsSupported(speechController.isSupported());
-    return speechController.subscribe((activeId) => {
-      setIsSpeaking(activeId === messageId);
-    });
-  }, [messageId]);
+export function useSpeechSynthesis({
+  messageId,
+  text,
+}: UseSpeechSynthesisOptions) {
+  const isSpeaking = useSyncExternalStore(
+    subscribeMessageSpeaking,
+    () => speechController.isPlaying(messageId),
+    () => false,
+  );
+
+  const isSupported = useSyncExternalStore(
+    () => () => undefined,
+    () => speechController.isSupported(),
+    () => false,
+  );
 
   const toggle = useCallback(() => {
+    void unlockSpeechAudio();
     speechController.toggle(messageId, text);
   }, [messageId, text]);
 

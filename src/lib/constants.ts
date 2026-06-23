@@ -1,6 +1,6 @@
 import { buildNeurixSystemPrompt } from "@/lib/consultant-prompt";
 
-/** Neurix AI consultant system instructions */
+/** Neurix Solution consultant system instructions */
 export const NEURIX_SYSTEM_PROMPT = buildNeurixSystemPrompt();
 
 export const OPENAI_MODEL = "gpt-4o-mini";
